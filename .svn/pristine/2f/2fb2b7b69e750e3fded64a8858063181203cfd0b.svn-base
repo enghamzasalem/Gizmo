@@ -1,0 +1,242 @@
+package edu.cmu.gizmo.management.taskorchestration.actions;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.servlet.http.HttpServletRequest;
+
+
+import edu.cmu.gizmo.management.taskclient.actions.GizmoAction;
+import edu.cmu.gizmo.management.taskorchestrator.TaskScriptOrchestrator.TaskType;
+import edu.cmu.gizmo.management.taskorchestrator.TaskScriptOrchestrator;
+import edu.cmu.gizmo.management.taskorchestrator.formbeans.OrchestrationStep;
+import edu.cmu.gizmo.management.taskorchestrator.formbeans.OrchestrationStep.OrchestrationStatus;
+import edu.cmu.gizmo.management.taskorchestrator.formbeans.Primitive;
+
+public class OrchestrationAction extends GizmoAction{
+
+	private OrchestrationStep orchStep;
+
+
+	public String execute(){
+		HttpServletRequest request = getServletRequest();
+		String action = request.getParameter("action");
+		if (action != null) {
+			if (action.equals("init")) {
+				TaskScriptOrchestrator orchestrator = new TaskScriptOrchestrator();
+				request.getSession().setAttribute("orchestrator", orchestrator);
+				
+				orchestrator.initializeTakScript();
+				orchestrator.addGroupedTask();
+				
+				orchStep = populateOrchestrationStep(0, null, orchestrator);
+				
+				return "streamResults";
+			}
+			
+			if (action.equals("addTask")) {
+				String primitiveName = request.getParameter("primitiveName");
+				Integer dependsOnId = new Integer(request.getParameter("dependsOnID"));
+				String dependsOnName = request.getParameter("dependsOnName");
+				String futureTaskType = request.getParameter("taskType");
+				String inputMap = request.getParameter("inputMap");
+				String outputMap = request.getParameter("outputMap");
+				
+				TaskScriptOrchestrator orchestrator = getOrchestrator(request);
+				
+				TaskType prevTaskType = (TaskType) request.getSession()
+						.getAttribute("taskType");
+				
+				addTask(primitiveName, dependsOnId, 0, prevTaskType, orchestrator,
+						inputMap, outputMap, dependsOnName);
+				
+				orchStep = populateOrchestrationStep(0, primitiveName, orchestrator);
+				
+				if (futureTaskType != null) {
+					request.getSession().setAttribute("taskType", TaskType.valueOf(futureTaskType));
+				}
+				
+				
+				return "streamResults";
+			}
+			
+			if(action.equals("deleteTask")) {
+				String primitiveName = request.getParameter("primitiveName");
+				TaskScriptOrchestrator orchestrator = getOrchestrator(request);
+				
+				orchestrator.deleteTask(0, primitiveName);
+			}
+			
+			if (action.equals("save")) {
+				/*
+				 * Add a new JSON field: saveResult: [success | failure]
+				 */
+				String primitiveName = request.getParameter("primitiveName");
+				Integer dependsOnId = new Integer(
+						request.getParameter("dependsOnID"));
+				String dependsOnName = request.getParameter("dependsOnName");
+				
+				String fileName = request.getParameter("fileName");
+				String inputMap = request.getParameter("inputMap");
+				String outputMap = request.getParameter("outputMap");
+				
+				TaskType prevTaskType = (TaskType) request.getSession()
+						.getAttribute("taskType");
+				
+				TaskScriptOrchestrator orchestrator = getOrchestrator(request);
+				
+				addTask(primitiveName, dependsOnId, 0, prevTaskType, orchestrator,
+						inputMap, outputMap, dependsOnName);
+				
+				boolean result = orchestrator.writeTestPlanWithFileName(fileName, getScriptsHomeDirectory());
+				
+				orchStep = new OrchestrationStep();
+				if (result == true) {
+					orchStep.setSaveStatus(OrchestrationStatus.SUCCESS);
+				} else {
+					orchStep.setSaveStatus(OrchestrationStatus.FAILURE);
+					orchestrator.deleteTask(0, primitiveName);
+					
+				}
+				
+				
+				return "streamResults"; 
+				
+			}
+		}
+		
+
+		return SUCCESS;
+	}
+
+
+	public OrchestrationStep getOrchStep() {
+		return orchStep;
+	}
+
+
+	public void setOrchStep(OrchestrationStep orchStep) {
+		this.orchStep = orchStep;
+	}
+	
+	private Vector<Primitive> getPrimitivesList(String primitiveName, 
+			TaskScriptOrchestrator orchestrator) {
+		
+		Vector<String> primitivesStringList = 
+				orchestrator.listPrimitives(primitiveName);
+		Vector<Primitive> primitivesBeanList = 
+				new Vector<Primitive>();
+		
+		Primitive aPrimitive;
+		for (int count = 0; count < primitivesStringList.size(); count++) {
+			String primitiveStr = primitivesStringList.get(count);
+			aPrimitive = new Primitive();
+			aPrimitive.setId(primitiveStr);
+			aPrimitive.setName(primitiveStr);
+			primitivesBeanList.add(aPrimitive);
+		}
+		
+		return primitivesBeanList;
+	}
+	
+	private Vector<Primitive> getPrimitiveDependency(int groupId, 
+			TaskScriptOrchestrator orchestrator) {
+		
+		ConcurrentHashMap<String, String> dependencyList = 
+				orchestrator.listDependsOnLeavesHashMap(groupId);
+		Vector<Primitive> dependencyBeanList = 
+				new Vector<Primitive>();
+		
+		Primitive aPrimitive;
+		Enumeration<String> dependencyListKeys = 
+				dependencyList.keys();
+		Enumeration<String> dependencyListValues = 
+				dependencyList.elements();
+		String id;
+		String value;
+		while (dependencyListKeys.hasMoreElements()) {
+			id = dependencyListKeys.nextElement();
+			value = dependencyListValues.nextElement();
+			
+			aPrimitive = new Primitive();
+			aPrimitive.setId(id);
+			aPrimitive.setName(value);
+			
+			dependencyBeanList.add(aPrimitive);
+		}
+		
+		return dependencyBeanList;
+		
+	}
+	
+	private OrchestrationStep populateOrchestrationStep(int groupId,
+			String primitiveName, TaskScriptOrchestrator orchestrator) {
+		
+		Vector<Primitive> primitivesList = 
+				getPrimitivesList(primitiveName, orchestrator);
+		
+		Vector<Primitive> primitiveDependenciesList = 
+				getPrimitiveDependency(groupId, orchestrator);
+		
+		OrchestrationStep anOrchestrationStep = 
+				new OrchestrationStep();
+		
+		anOrchestrationStep.setPrimitivesList(primitivesList);
+		anOrchestrationStep
+			.setPrimitiveDependenciesList(primitiveDependenciesList);
+		
+		return anOrchestrationStep;
+	}
+	
+	private void addTask(String primitiveName, Integer dependsOnId, int groupId,
+						 TaskType taskType, TaskScriptOrchestrator orchestrator,
+						 String inputMap, String outputMap, String dependsOnName) {
+		
+		if (taskType == null) {
+			taskType = TaskType.SEQUENTIAL;
+		}
+		
+		orchestrator.addTask(taskType, 0, dependsOnId, primitiveName);
+		
+		if (!dependsOnName.isEmpty() && !inputMap.isEmpty() && !outputMap.isEmpty()) {
+			String[] inputMapArray = inputMap.split(",");
+			String[] outputMapArray = outputMap.split(",");
+			
+			if (inputMapArray.length == outputMapArray.length) {
+				
+				orchestrator.addInput(primitiveName, 0);
+				orchestrator.addOutput(dependsOnName, 0);
+				
+				for (int count = 0; count < inputMapArray.length; count++) {
+					orchestrator.addInputOutput(primitiveName, 0, 
+							outputMapArray[count], inputMapArray[count]);
+				}
+			}
+		}
+	}
+	
+	private TaskScriptOrchestrator 
+		getOrchestrator(HttpServletRequest request) {
+		
+		return (TaskScriptOrchestrator) request.getSession()
+				.getAttribute("orchestrator");
+	}
+	
+	private String getScriptsHomeDirectory() {
+		HttpServletRequest request= getServletRequest();
+		
+		String path = request.getServletContext().getRealPath("/config.properties");
+		File file = new File(path);
+		return file.getParent() + "/WEB-INF/classes";
+		
+	}
+	
+	private String[] getArrayListFromCommaSeparatedString(String stringList) {
+		return stringList.split(",");
+	}
+	
+}

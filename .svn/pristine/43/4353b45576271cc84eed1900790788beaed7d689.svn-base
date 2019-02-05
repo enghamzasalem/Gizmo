@@ -1,0 +1,418 @@
+package edu.cmu.gizmo.unittest;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.util.Vector;
+
+import junit.framework.TestCase;
+
+import org.w3c.dom.Document;
+
+import edu.cmu.gizmo.management.taskorchestrator.TaskScriptOrchestrator;
+import edu.cmu.gizmo.management.taskorchestrator.TaskScriptOrchestrator.TaskSeq;
+import edu.cmu.gizmo.management.taskorchestrator.TaskScriptOrchestrator.TaskType;
+
+public class TestTaskScriptOrchestrator  extends TestCase {
+
+	// Tested
+	public void testWriteTestPlanWithFileName() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+
+		taskScriptOrchestrator.writeTestPlanWithFileName("testWriteTestPlanWithFileName.xml", "WebContent");
+	}	
+	
+	// Tested
+	public void testShouldWriteTaskPlanInScriptInDirectoryWhenCompleted() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+
+		FileOutputStream f = null;
+		try {
+			f = new FileOutputStream(new File("test1.xml"));
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		taskScriptOrchestrator.writeTestPlan(f);
+	}
+
+	// Tested
+	public void testShouldCreateEmptyPlannedTakScript() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldAddOneGroupedTaskIntoPlannedTaskScript() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.writeTestPlan(System.out);		
+	}
+	
+	// Tested
+	public void testShouldAddOneTaskIntoPlannedTaskScript() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldAddSecondTaskIntoOneGroupedTaskWithoutDependency() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldAddSecondTaskIntoOneGroupedTaskWithDependency() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+	
+	// Tested
+	public void testShouldDeleteOneGroupedTaskIntoPlannedTaskScriptWhileUnderConstruction() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		taskScriptOrchestrator.deleteGroupedTask(new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldDeleteOneTaskIntoPlannedTaskScriptWhileUnderConstruction() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.deleteTask(new Integer(0), new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	
+	public void testShouldDeleteOneTaskWithStringIntoPlannedTaskScriptWhileUnderConstruction() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.deleteTask(new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldGroupedTaskMoveUpAnOrderWhileUnderConstruction() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(1), new Integer(-1), "SkyCommunicationCapability");		
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.moveGroupedTask(new Integer(1), TaskSeq.UP);
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested	
+	public void testShouldGroupedTaskMoveDownAnOrderWhileUnderConstruction() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(1), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.moveGroupedTask(new Integer(0), TaskSeq.DOWN);
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+	
+	// Tested
+	public void testShouldReturnCorrectTaskName() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(1), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		
+		assertEquals("SkyCommunicationCapability", taskScriptOrchestrator.getTaskName(new Integer(0), new Integer(1)));
+		assertEquals("GoToRoomCapability", taskScriptOrchestrator.getTaskName(new Integer(0), new Integer(0)));
+		assertEquals("SkyCommunicationCapability", taskScriptOrchestrator.getTaskName(new Integer(1), new Integer(0)));
+	}
+
+	// Tested
+	public void testShouldReturnAllPossiblePrimitives() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		String primitiveName = "gotoroomcapability";
+		Vector<String> possibleCapabilities = taskScriptOrchestrator.listPrimitives(primitiveName);
+		for(String capability: possibleCapabilities)
+			System.out.println("possibleCapability: " + capability);
+	}
+	
+	// Tested
+	public void testShouldTaskMoveDownAnOrderWhileUnderConstruction() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.moveTask(new Integer(0), new Integer(0), TaskSeq.DOWN);
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldTaskMoveUpAnOrderWhileUnderConstruction() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.moveTask(new Integer(0), new Integer(1), TaskSeq.UP);
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldAddSecondGroupedTaskWithoutDependency() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(1), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldAddGroupedTaskDependency() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(1), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addGroupedTaskDependency(new Integer(1), new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);		
+	}
+	
+	// Tested
+	public void testShouldAddTaskDependency() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addTaskDependency(new Integer(0), new Integer(1), new Integer(0), new Integer(1), "GoToRoomCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);		
+	}
+	
+	// Tested
+	public void testShouldDeleteGroupedTaskDependency() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(1), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addGroupedTaskDependency(new Integer(1), new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);		
+		System.out.println();
+		taskScriptOrchestrator.deleteGroupedTaskDependency(new Integer(1));
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}	
+	
+
+	// Tested
+	public void testShouldDeleteTaskDependency() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addTaskDependency(new Integer(0), new Integer(1), new Integer(0), new Integer(1), "GoToRoomCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		taskScriptOrchestrator.deleteTaskDependency(new Integer(0), new Integer(1));
+		taskScriptOrchestrator.writeTestPlan(System.out);		
+	}
+
+	// Tested
+	public void testShouldListGroupID() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(1), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		Vector<String> groupIDList = taskScriptOrchestrator.listGroupID();
+		assertEquals("2", new Integer(groupIDList.size()).toString());
+	}
+
+	// Tested
+	public void testShoudlListAllScriptNames() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.listAllScripts();		
+	}
+
+	// Tested
+	public void testShoudlListTaskName() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addTaskDependency(new Integer(0), new Integer(1), new Integer(0), new Integer(1), "GoToRoomCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		Vector<String> dependsOnList = taskScriptOrchestrator.listDependsOn(new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		assertEquals("2", new Integer(dependsOnList.size()).toString());		
+	}
+
+	// Tested
+	public void testShouldModifyExistingTask() {
+
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "SkyCommunicationCapability");
+		taskScriptOrchestrator.addTaskDependency(new Integer(0), new Integer(1), new Integer(0), new Integer(1), "GoToRoomCapability");
+		
+		FileOutputStream f = null;
+		try {
+			f = new FileOutputStream(new File("test1.xml"));
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		taskScriptOrchestrator.writeTestPlan(f);
+		Document doc = taskScriptOrchestrator.loadExistingTaskDocument("test1.xml");
+		taskScriptOrchestrator.addTask(TaskType.PARALLEL, new Integer(0), new Integer(-1), "DummyPrimitiveCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+	}
+
+	// Tested
+	public void testShouldAddInput() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addInput("GoToRoomCapability", new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		
+	}
+	
+	// Tested
+	public void testShouldAddOutput() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "SkyCommunicationCapability");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addOutput("GoToRoomCapability", new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		
+	}
+	
+	// Tested
+	public void testShouldGetListOfPreviousOutputs() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "Communicate");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addInput("GoToRoomCapability", new Integer(0));
+		taskScriptOrchestrator.addOutput("GoToRoomCapability", new Integer(0));
+		taskScriptOrchestrator.addInput("Communicate", new Integer(0));
+		taskScriptOrchestrator.addOutput("Communicate", new Integer(0));
+		Vector prevListOutput = taskScriptOrchestrator.getListOfPreviousOutputs(new Integer(0), new Integer(0));
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		for(int i = 0; i < prevListOutput.size(); ++i) {
+			System.out.println("Prev Output: " + prevListOutput.get(i));
+		}
+	}
+	
+	// Tested
+	public void testListDependsOnLeaves() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "Communicate");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		Vector<String> listDependsOnLeaves = taskScriptOrchestrator.listDependsOnLeaves(0);
+	}	
+	
+	// Tested
+	public void testShouldAddInputOutput() {
+		TaskScriptOrchestrator taskScriptOrchestrator = new TaskScriptOrchestrator();
+		taskScriptOrchestrator.initializeTakScript();
+		taskScriptOrchestrator.addGroupedTask();
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(-1), "GoToRoomCapability");
+		taskScriptOrchestrator.addTask(TaskType.SEQUENTIAL, new Integer(0), new Integer(0), "Communicate");
+		taskScriptOrchestrator.writeTestPlan(System.out);
+		System.out.println();
+		taskScriptOrchestrator.addInput("GoToRoomCapability", new Integer(0));
+		taskScriptOrchestrator.addOutput("GoToRoomCapability", new Integer(0));
+		taskScriptOrchestrator.addInput("Communicate", new Integer(0));
+		taskScriptOrchestrator.addOutput("Communicate", new Integer(0));
+		taskScriptOrchestrator.addInputOutput("Communicate", new Integer(0), "room", "room");
+		taskScriptOrchestrator.writeTestPlan(System.out);		
+	}	
+
+}

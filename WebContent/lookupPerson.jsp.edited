@@ -1,0 +1,129 @@
+<%@ page language="java" contentType="text/html; charset=ISO-8859-1"
+    pageEncoding="ISO-8859-1"%>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+	<style type="text/css">
+		.ui-timepicker-div .ui-widget-header{ margin-bottom: 8px; }
+		.ui-timepicker-div dl{ text-align: left; }
+		.ui-timepicker-div dl dt{ height: 25px; }
+		.ui-timepicker-div dl dd{ margin: -25px 0 10px 65px; }
+		.ui-timepicker-div td { font-size: 90%; }
+	</style>
+	
+	<script type="text/javascript">
+		$(document).ready(function(){
+			$("#startTime").datetimepicker({
+				timeFormat: 'hh:mm',
+				dateFormat: 'yy-mm-dd',
+				separator: ' @ '
+			});
+			$("#endTime").datetimepicker({
+				timeFormat: 'hh:mm',
+				dateFormat: 'yy-mm-dd',
+				separator: ' @ '
+			});
+			
+			$('#submitBtn').click(
+					function()
+					{
+						var startDateTime = getFormattedGoogleDateTime($("#startTime").attr("value"));
+						var endDateTime = getFormattedGoogleDateTime($("#endTime").attr("value"));
+
+						$.ajax({
+							url: "http://"+ document.location.host + "/gizmoapp/taskClient.action?action=sendInput",
+							data: { taskId: $("#findPersonTaskId").attr("value"), 
+								   capabilityId:  $("#findPersonCapabilityId").attr("value"), 
+<<<<<<< .working
+								   personName:  $("#personName").attr("value"),
+								   startTime:  $("#startTime").attr("value"),
+								   endTime:  $("#endTime").attr("value")
+=======
+								   personName:  $("#personName").attr("value"),
+								   startTime:  startDateTime,
+								   endTime:  endDateTime
+>>>>>>> .merge-right.r735
+								   },
+							success: function(data) {
+								//alert('done!');
+								getJsonOutput();
+							}	   
+						});
+					}
+			);
+			
+		});
+
+		function getJsonOutput() {
+			//$("#formDiv").append("<button id='navBtn'>Navigate!</button>");
+		
+			var outputInterval = setInterval(function(){ 
+				$.ajax({
+				url: "http://"+ document.location.host + "/gizmoapp/taskClient.action?action=getOutput",
+				data: { taskId: $("#findPersonTaskId").attr("value"), 
+					   capabilityId:  $("#findPersonCapabilityId").attr("value")
+					   },
+			    dataType: 'json',	   
+				success: function(data) {
+					//alert(data.output.personName);
+					var personNameStr = data.output.personName;
+					if(personNameStr == "Unknown")
+					{
+						alert('Person name is not valid. Please re-enter the data');
+						clearInterval(outputInterval);
+						return;
+					}
+					$("#formDiv").empty();
+					$("#formDiv").append("<label id='nameLbl'/>'s status on the calendar is <label id='statusLbl'/><br/>");
+					$("#formDiv").append("Location: <label id='roomLbl'/><br/>");
+					
+					$("#nameLbl").text(data.output.personName);
+					$("#nameLbl2").text(data.output.personName);
+					$("#roomLbl").text(data.output.roomNumber);
+					$("#statusLbl").text(data.output.availStatus);
+				}	   
+			})}, 1000);
+		}
+		
+		function getFormattedGoogleDateTime(dateTime) {
+			var dateTimeArr = dateTime.split(' @ ');
+			var date = dateTimeArr[0];
+			var time = dateTimeArr[1] + ":00";
+			
+			return date + "T" + time; 
+		}
+
+	</script>
+	
+	<title>Lookup Person</title>
+</head>
+<body>
+
+	<%
+	
+	String uiElementId = (String) session.getAttribute("lookupPerson.jsp");
+	String [] uiElementTokens = uiElementId.split("_x_");
+	String taskId = uiElementTokens[0];
+	String capabilityId = uiElementTokens[1];
+	pageContext.setAttribute("taskId", taskId);
+	pageContext.setAttribute("capabilityId", capabilityId);
+
+	%>
+	
+	<input type="hidden" name="action" value="sendInput"/>
+	<input type="hidden" id="findPersonTaskId" name="findPersonTaskId" value="<%= taskId %>"/>
+	<input type="hidden" id="findPersonCapabilityId" name="findPersonCapabilityId" value="<%= capabilityId %>"/>
+	<div id="mainDiv">
+		<label style="font-style: italic;color:white;background: gray;">Look-up Person</label>		
+		<div id="formDiv">
+			<label>Name:</label> <input type="text" name="personName" id="personName"/> <br/>
+			<label>Start Date/Time: </label> <input type="text" name="startTime" id="startTime"></input> <br/>
+			<label>End Date/Time: </label> <input type="text" name="endTime" id="endTime"></input> <br/>
+			<button id="submitBtn">Find!</button>
+		</div>
+	</div>
+	
+</body>
+</html>

@@ -1,0 +1,753 @@
+/*
+ * TestTaskClient.java Jul 10, 2012 1.0
+ */
+package edu.cmu.gizmo.unittest;
+
+import java.util.Observable;
+import java.util.Observer;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import javax.jms.MessageListener;
+import javax.jms.MessageProducer;
+import javax.jms.ObjectMessage;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.capability.Capability;
+import edu.cmu.gizmo.management.capability.PausableCapability;
+import edu.cmu.gizmo.management.taskbus.GizmoTaskBus;
+import edu.cmu.gizmo.management.taskbus.messages.LoadTaskMessage;
+import edu.cmu.gizmo.management.taskbus.messages.RejectTaskMessage;
+import edu.cmu.gizmo.management.taskbus.messages.TaskCompleteMessage;
+import edu.cmu.gizmo.management.taskbus.messages.TaskMessage;
+import edu.cmu.gizmo.management.taskbus.messages.TaskReadyMessage;
+import edu.cmu.gizmo.management.taskclient.TaskClient;
+import edu.cmu.gizmo.management.taskmanager.TaskExecutor;
+import edu.cmu.gizmo.management.taskmanager.TaskExecutor.TaskType;
+import edu.cmu.gizmo.management.taskmanager.TaskManager.TaskRequester;
+import edu.cmu.gizmo.management.taskmanager.TaskReservation;
+import edu.cmu.gizmo.management.taskmanager.TaskStatus;
+
+/**
+ * The Class TestTaskClient.
+ */
+public class TestTaskClient extends TestCase {
+
+	/** The manager. */
+	private MockTaskManager manager;
+
+	/** The client. */
+	private TaskClient client;
+
+	/** The servlet. */
+	private MockCapabilityServlet servlet;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see junit.framework.TestCase#setUp()
+	 */
+	@Override
+	public void setUp() {
+		System.out.println("***");
+		manager = new MockTaskManager();
+		client = new TaskClient();
+		servlet = new MockCapabilityServlet(client);
+		client.addObserver(servlet);
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see junit.framework.TestCase#tearDown()
+	 */
+	@Override
+	public void tearDown() {
+		manager.unLoad();
+		client.unLoadClient();
+
+		client = null;
+		manager = null;
+	}
+
+	/**
+	 * Safe sleep.
+	 * 
+	 * @param time
+	 *            the time
+	 */
+	private void safeSleep(final long time) {
+		try {
+			Thread.sleep(time);
+		} catch (final InterruptedException e) {
+		}
+	}
+
+	/**
+	 * Test should display ui after start task.
+	 */
+	public void testShouldDisplayUIAfterStartTask() {
+
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp);
+		safeSleep(1000);
+
+		client.continueTask();
+		safeSleep(1000);
+
+		assertTrue(servlet.isDisplayUI());
+	}
+
+	/**
+	 * Test should send capability input.
+	 */
+	public void testShouldSendCapabilityInput() {
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp);
+		safeSleep(1000);
+
+		client.continueTask();
+		safeSleep(1000);
+
+		assertTrue(manager.getGotCapInputMessage());
+	}
+
+	/**
+	 * Test should send start capability after capability ready.
+	 */
+	public void testShouldSendStartCapabilityAfterCapabilityReady() {
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp);
+
+		safeSleep(1000);
+		client.continueTask();
+
+		safeSleep(1000);
+		assertTrue(manager.getGotStartCapMessage());
+
+	}
+
+	/**
+	 * Test should receive running capability ouptut for this task and
+	 * capability i ds.
+	 */
+	public void testShouldReceiveRunningCapabilityOuptutForThisTaskAndCapabilityIDs() {
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp);
+
+		safeSleep(1000);
+
+		client.continueTask();
+		safeSleep(1000);
+
+		assertTrue(manager.getGotCapOutputMessage());
+	}
+
+	/**
+	 * Test should run multiple capabilities concurrently.
+	 */
+	public void testShouldRunMultipleCapabilitiesConcurrently() {
+		manager.setCapabilityCount(5);
+		final Integer tid = manager.getTaskId();
+
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp);
+		safeSleep(1000);
+
+		client.continueTask();
+		safeSleep(1000);
+
+		// when 5 capabilities are running
+		assertTrue(servlet.getDisplayCount() == 5);
+
+		// and the (non-dashboard) task is marked as complete
+		manager.triggerTaskComplete(tid);
+		safeSleep(3000);
+
+		// then no capabilities should be running
+
+		System.out.println(servlet.getDisplayCount());
+		assertTrue(servlet.getDisplayCount() == 0);
+	}
+
+	/**
+	 * Test should gracefully unload capability on capability complete message.
+	 */
+	public void testShouldSignalUnloadCapabilityOnCapabilityCompleteMessage() {
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml") );
+
+		client.loadNewTask(rsvp);
+		safeSleep(1000);
+
+		client.continueTask();
+		safeSleep(1000);
+
+		// trigger unloading and wait to see if it works
+		manager.triggerCapability1Complete();
+		safeSleep(3000);
+
+		// the other capability should still be running
+		assertTrue(servlet.getDisplayCount() == 1);
+	}
+	
+	public void testShouldSendCompleteTaskCommandWhenTaskCompletes() {
+		manager.setCapabilityCount(1);
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml") );
+
+		client.loadNewTask(rsvp);
+		safeSleep(1000);
+
+		client.continueTask();
+		safeSleep(1000);
+
+		// trigger unloading and wait to see if it works
+		manager.triggerTaskComplete(0);
+		safeSleep(5000);
+
+		assertTrue(servlet.getCompleted());
+	}
+	
+	
+	/**
+	 * Test should mark all capabilities complete on task complete message.
+	 */
+	public void testShouldMarkAllCapabilitiesCompleteOnTaskCompleteMessage() {
+
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		final Integer tid = manager.getTaskId();
+		client.loadNewTask(rsvp);
+		safeSleep(1000);
+
+		client.continueTask();
+		safeSleep(1000);
+
+		// the dummy manager (should) starts two concurrent capabilities
+		assertTrue(servlet.getDisplayCount() == 2);
+
+		// trigger unloading and wait to see if it works
+		manager.triggerTaskComplete(tid);
+		safeSleep(3000);
+
+		System.out.println(servlet.getDisplayCount());
+		assertTrue(servlet.getDisplayCount() == 0);
+
+	}
+
+	/**
+	 * Test should handle concurrent tasks.
+	 */
+	public void testShouldHandleConcurrentTasks() {
+
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp);
+		safeSleep(250);
+
+		client.continueTask();
+		final TaskReservation rsvp2 = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp2);
+		safeSleep(250);
+
+		client.continueTask();
+
+		assertTrue(manager.getTaskId() > 1);
+		assertTrue(servlet.getDisplayCount() > 2);
+
+	}
+	
+	/**
+	 * Test should handle concurrent tasks.
+	 */
+	public void testClientShouldTellUserWhenATaskIsRejected() {
+
+		// reject this task
+		manager.setReject();
+		
+		final TaskReservation rsvp = new TaskReservation("Find Jane", 1,
+				TaskRequester.TASK_CLIENT,
+				(ConcurrentHashMap<Object, Object>) null, TaskType.SCRIPT_TASK,
+				new String("leg3demo_seq.xml"));
+
+		client.loadNewTask(rsvp);
+		safeSleep(1000);
+		
+		assertTrue(servlet.getRejected());
+
+	}
+	
+}
+
+// -----------------------------------------------------------------------------
+// MOCK classes for testing
+// -----------------------------------------------------------------------------
+
+class MockCapabilityForTaskClient extends Capability implements
+		PausableCapability {
+	private Boolean gotCapInputMessage;
+	private Boolean gotStartCapMessage;
+	private Boolean sentCapOutputMessage;
+	private final Boolean isComplete;
+	private Boolean running;
+	private final String NAME = "MockCapability";
+
+	public MockCapabilityForTaskClient() {
+		gotCapInputMessage = false;
+		gotStartCapMessage = false;
+		sentCapOutputMessage = false;
+		isComplete = false;
+		running = false;
+	}
+
+	// @Override
+	// public Boolean load(Integer taskId, Integer capabilityId,
+	// ConcurrentHashMap<Object,Object>config) {
+	// config.put("ui.class", "XXX");
+	// config.put("ui.display", "YYY");
+	// return super.load(taskId,capabilityId,config);
+	//
+	// }
+	//
+	public Boolean getGotCapInputMessage() {
+		return gotCapInputMessage;
+	}
+
+	public Boolean getGotStartCapMessage() {
+		return gotStartCapMessage;
+	}
+
+	@Override
+	public void execute() {
+		running = true;
+		while (running) {
+			if (getStatus() == CapabilityStatus.RUNNING) {
+				sendOutput("mock ouput", "This is output");
+				gotStartCapMessage = true;
+				sentCapOutputMessage = true;
+				try {
+					Thread.sleep(500);
+				} catch (final InterruptedException e) {
+				}
+			}
+		}
+	}
+
+	public void forceKill() {
+		running = false;
+	}
+
+	public void triggerComplete() {
+		running = false;
+		setStatus(CapabilityStatus.COMPLETE, "Complete");
+	}
+
+	public Boolean isComplete() {
+		return isComplete;
+
+	}
+
+	@Override
+	public void terminate() {
+		running = false;
+		;
+	}
+
+	@Override
+	public String getCapabilityName() {
+		return NAME;
+	}
+
+	@Override
+	public String getCapabilityDescription() {
+		return "DUMMY DESCRIPTION";
+	}
+
+	@Override
+	public void setInput(final ConcurrentHashMap<Object, Object> inout) {
+		gotCapInputMessage = true;
+	}
+
+	@Override
+	public Object getInputParameterValue(final Object param) {
+
+		return null;
+	}
+
+	@Override
+	public Object pause() {
+		return null;
+	}
+
+	@Override
+	public void resume(final Object state) {
+		return;
+	}
+
+	public synchronized Boolean getGotCapOutputMessage() {
+		return sentCapOutputMessage;
+	}
+
+	@Override
+	public ConcurrentHashMap<String, Class> getInputRequirements() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public ConcurrentHashMap<String, Class> getOutputRequirements() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}
+
+class MockTaskManager implements Observer, MessageListener {
+	private final GizmoTaskBus bus;
+	private final MessageConsumer sub;
+	private final MessageProducer pub;
+	private final ExecutorService taskRunner;
+	private Integer taskId;
+	private TaskStatus.TaskStatusValue status;
+	private MockCapabilityForTaskClient capability1, capability2;
+	private MockCapabilityForTaskClient[] concurrentCaps;
+	private Boolean reject;
+
+	/*
+	 * Booleans for testing
+	 */
+	private Boolean gotLoadTaskMessage;
+
+	public MockTaskManager() {
+		bus = GizmoTaskBus.connect();
+		sub = bus.getTaskConsumer(SELECTORS);
+		pub = bus.getTaskProducer();
+
+		reject = false;
+		
+		concurrentCaps = null;
+		gotLoadTaskMessage = false;
+		taskId = 0;
+
+		taskRunner = Executors.newSingleThreadExecutor();
+
+		try {
+			sub.setMessageListener(this);
+
+		} catch (final JMSException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	public void setReject() { 
+		reject = true;
+	}
+
+	public void setCapabilityCount(final int i) {
+		concurrentCaps = new MockCapabilityForTaskClient[i];
+
+	}
+
+	public Boolean getGotCapOutputMessage() {
+		return capability1.getGotCapOutputMessage();
+	}
+
+	public Boolean getGotCapInputMessage() {
+		return capability1.getGotCapInputMessage();
+	}
+
+	public Boolean getGotStartCapMessage() {
+		return capability1.getGotStartCapMessage();
+	}
+
+	public Boolean getGotLoadTaskMessage() {
+		return gotLoadTaskMessage;
+	}
+
+	private final String[] SELECTORS = { TaskMessage.LOAD_TASK, };
+
+	@Override
+	public void onMessage(final Message m) {
+		final Integer thisTid = taskId;
+		taskId++;
+		try {
+			if (m instanceof ObjectMessage) {
+
+				final TaskMessage tm = (TaskMessage) ((ObjectMessage) m)
+						.getObject();
+
+				if (tm.getMessageType() == TaskMessage.LOAD_TASK) {
+					
+					final LoadTaskMessage ltm = (LoadTaskMessage) tm;
+					gotLoadTaskMessage = true;
+
+					
+					final TaskReservation rsvp = ltm.getReservation();
+
+					if (reject == true) { 
+						RejectTaskMessage reject = 
+							new RejectTaskMessage(rsvp, "I feel like it");
+						
+						pub.send(bus.generateMessage(reject, 
+								TaskMessage.REJECT_TASK));
+						return;
+					}
+					
+
+					
+					final TaskReadyMessage ready = new TaskReadyMessage(
+							thisTid, rsvp, null);
+
+					pub.send(bus.generateMessage(ready, TaskMessage.TASK_READY));
+
+					if (rsvp.getTaskName().equalsIgnoreCase("Cobot3Dashboard")) {
+						return;
+					}
+					Integer i = new Integer(0);
+
+					final ConcurrentHashMap<Object, Object> config = new ConcurrentHashMap<Object, Object>();
+
+					config.put("ui.class", "XXX");
+					config.put("ui.display", "YYY");
+
+					if (concurrentCaps != null) {
+						for (MockCapabilityForTaskClient mcc : concurrentCaps) {
+							mcc = new MockCapabilityForTaskClient();
+							mcc.load(thisTid, i, config);
+							mcc.launch();
+							++i;
+						}
+					} else {
+
+						capability1 = new MockCapabilityForTaskClient();
+						capability1.load(thisTid, 42, config);
+						capability1.launch();
+
+						capability2 = new MockCapabilityForTaskClient();
+						capability2.load(thisTid, 43, config);
+						capability2.launch();
+					}
+				}
+			}
+		} catch (final Exception e) {
+			e.printStackTrace();
+		}
+
+	}
+
+	public void triggerTaskComplete(final Integer tid) {
+		try {
+			final TaskCompleteMessage resp = new TaskCompleteMessage(tid);
+
+			pub.send(bus.generateMessage(resp, TaskMessage.TASK_COMPLETE));
+
+		} catch (final JMSException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
+
+	public void triggerCapability2Complete() {
+		if (capability2 != null) {
+			capability2.triggerComplete();
+		}
+	}
+
+	public void isCapability2Complete() {
+		capability2.isComplete();
+	}
+
+	public void triggerCapability1Complete() {
+		if (capability1 != null) {
+			capability1.triggerComplete();
+		}
+	}
+
+	public void isCapability1Complete() {
+		capability1.isComplete();
+	}
+
+	public synchronized Boolean hasReceivedLoadTaskMessage() {
+		return gotLoadTaskMessage;
+	}
+
+	public TaskStatus.TaskStatusValue getStatus() {
+		return status;
+	}
+
+	public Boolean getSentCapOutputMessage() {
+		return capability1.getGotCapOutputMessage();
+	}
+
+	public Integer getTaskId() {
+		return taskId;
+	}
+
+	public void startTask(final TaskExecutor exe) {
+
+		taskRunner.execute(exe);
+	}
+
+	public void unLoad() {
+
+		if (concurrentCaps != null) {
+			for (final MockCapabilityForTaskClient m : concurrentCaps) {
+				if (m != null) {
+					m.unload();
+				}
+			}
+		}
+		if (capability1 != null) {
+			capability1.unload();
+		}
+		if (capability2 != null) {
+			capability2.unload();
+		}
+
+		bus.releaseConsumer(sub);
+		bus.releaseProducer(pub);
+
+		bus.disconnect();
+	}
+
+	@Override
+	public void update(final Observable o, final Object status) {
+		System.out.println(((TaskStatus) status).getStatusMessage());
+		taskId = ((TaskStatus) status).getTaskId();
+		this.status = ((TaskStatus) status).getStatus();
+	}
+}
+
+class MockCapabilityServlet implements Observer {
+	private Boolean displayUI;
+	private Boolean unloadUI;
+	private Boolean canceled;
+	private Boolean rejected;
+	private Boolean completed;
+	
+	private Integer displayCount;
+	private final TaskClient client;
+
+	public MockCapabilityServlet(final TaskClient c) {
+		client = c;
+		completed = false;
+		displayUI = false;
+		canceled = false;
+		unloadUI = false;
+		rejected = false;
+		displayCount = 0;
+	}
+
+	public Boolean getRejected() {
+		return rejected;
+	}
+
+	public Boolean getCanceled() {
+		return canceled;
+	}
+	
+	public Boolean getCompleted() {
+		return completed;
+	}
+
+	
+	public Boolean isDisplayUI() {
+		return displayUI;
+	}
+
+	public Integer getDisplayCount() {
+		return displayCount;
+	}
+
+	public Boolean isUnloadUI() {
+		return unloadUI;
+	}
+
+	@Override
+	public void update(final Observable o, final Object arg) {
+
+		ConcurrentHashMap<Object, Object> msg = (ConcurrentHashMap<Object, Object>) arg;
+
+		// got the message to show the UI
+		if (msg.get("cmd") == TaskClient.TaskClientCommands.LOAD_UI) {
+
+			displayUI = true;
+			displayCount++;
+			msg.get("ui");
+			final Integer taskId = (Integer) msg.get("taskId");
+			final Integer capabilityId = (Integer) msg.get("capabilityId");
+			System.out.println("Got loadUI " + capabilityId);
+
+			final String input = "261";
+			msg = new ConcurrentHashMap<Object, Object>();
+			msg.put("room", input);
+
+			client.sendInput(taskId, capabilityId, msg);
+		} 
+		else if (msg.get("cmd") == TaskClient.TaskClientCommands.UNLOAD_UI) {
+			final Integer capabilityId = (Integer) msg.get("capabilityId");
+			// received the "unloadUI" message
+			
+			
+			
+			System.out.println("Got unloadUI " + capabilityId);
+			unloadUI = true;
+			displayCount--;
+			if (msg.containsKey("reason")) {
+				if (((String) msg.get("reason")).contains("success")) {
+					canceled = true;
+				}
+			}
+			else {
+				client.continueTask();
+			}
+		}
+		// got the message to show the UI
+		else if (msg.get("cmd") == TaskClient.TaskClientCommands.REJECT_TASK) {
+			rejected = true;
+		}
+		else if (msg.get("cmd") == TaskClient.TaskClientCommands.COMPLETE_TASK) {
+			completed = true;
+		}
+	}
+}

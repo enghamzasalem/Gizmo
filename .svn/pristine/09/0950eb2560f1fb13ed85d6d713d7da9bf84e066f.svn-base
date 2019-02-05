@@ -1,0 +1,83 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js">
+	</script>
+	<script src="http://code.jquery.com/ui/1.8.21/jquery-ui.min.js" type="text/javascript">
+	</script>
+	<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.21/themes/base/jquery-ui.css" type="text/css" media="all" />
+	<script type="text/javascript" src="http://trentrichardson.com/examples/timepicker/jquery-ui-timepicker-addon.js"></script>
+	<style type="text/css">
+		.ui-timepicker-div .ui-widget-header{ margin-bottom: 8px; }
+		.ui-timepicker-div dl{ text-align: left; }
+		.ui-timepicker-div dl dt{ height: 25px; }
+		.ui-timepicker-div dl dd{ margin: -25px 0 10px 65px; }
+		.ui-timepicker-div td { font-size: 90%; }
+	</style>
+	
+	<script type="text/javascript">
+		$(document).ready(function(){
+			$("#startTime").datetimepicker();
+			$("#endTime").datetimepicker();
+			
+			$('#submitBtn').click(
+					function()
+					{
+					}
+			);
+			
+		});
+
+		function getJsonOutput() {
+			//$("#formDiv").append("<button id='navBtn'>Navigate!</button>");
+		
+			var outputInterval = setInterval(function(){ 
+				$.ajax({
+				url: "http://"+ document.location.host + "/gizmoapp/taskClient.action?action=getOutput",
+				data: { taskId: $("#findPersonTaskId").attr("value"), 
+					   capabilityId:  $("#findPersonCapabilityId").attr("value")
+					   },
+			    dataType: 'json',	   
+				success: function(data) {
+					//alert(data.output.personName);
+					var personNameStr = data.output.personName;
+					if(personNameStr == "Unknown")
+					{
+						alert('Person name is not valid. Please re-enter the data');
+						clearInterval(outputInterval);
+						return;
+					}
+					$("#formDiv").empty();
+					$("#formDiv").append("<label id='nameLbl'/>'s status on the calendar is <label id='statusLbl'/><br/>");
+					$("#formDiv").append("Location: <label id='roomLbl'/><br/>");
+					
+					$("#nameLbl").text(data.output.personName);
+					$("#nameLbl2").text(data.output.personName);
+					$("#roomLbl").text(data.output.roomNumber);
+					$("#statusLbl").text(data.output.availStatus);
+				}	   
+			})}, 1000);
+		}
+
+	</script>
+	
+	<title>Lookup Person</title>
+</head>
+<body>
+	
+	<input type="hidden" name="action" value="sendInput"/>
+	<input type="hidden" id="findPersonTaskId" name="findPersonTaskId" value="<%= taskId %>"/>
+	<input type="hidden" id="findPersonCapabilityId" name="findPersonCapabilityId" value="<%= capabilityId %>"/>
+	<div id="mainDiv">
+		<label style="font-style: italic;color:white;background: gray;">Look-up Person</label>		
+		<div id="formDiv">
+			<label>Name:</label> <input type="text" name="personName" id="personName"/> <br/>
+			<label>Start Date/Time: </label> <input type="text" name="startTime" id="startTime"></input> <br/>
+			<label>End Date/Time: </label> <input type="text" name="endTime" id="endTime"></input> <br/>
+			<button id="submitBtn">Find!</button>
+		</div>
+	</div>
+	
+</body>
+</html>

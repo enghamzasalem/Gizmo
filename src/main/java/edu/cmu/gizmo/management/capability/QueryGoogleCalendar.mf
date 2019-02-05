@@ -1,0 +1,7 @@
+robot.exist=false
+capability.directory=edu.cmu.gizmo.management.capability
+personneldata=WebContent/WEB-INF/classes/edu/cmu/gizmo/management/capability/personneldata.txt
+ui.class=edu.cmu.gizmo.management.taskclient.observers.LookupPersonObserver
+ui.display=lookupPerson.jsp
+output.name=roomnumber
+parameter.name=room

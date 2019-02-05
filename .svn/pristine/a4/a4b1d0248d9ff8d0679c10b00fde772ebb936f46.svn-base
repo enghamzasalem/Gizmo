@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project>
+
+	<property name="src.dir"     value="src"/>
+    <property name="build.dir"   value="WebContent/WEB-INF"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="jar.dir"     value="${build.dir}/lib"/>
+	<property environment="env" />
+	<property name="tomcat.home" value="${env.TOMCAT_HOME}"  />
+	<property name="webapp.dir" value="${tomcat.home}/webapps/gizmoapp"  />
+
+	<path id="classpath">
+        <fileset dir="${jar.dir}" includes="**/*.jar"/>
+    </path>
+    
+    <target name="compile">
+        <javac srcdir="${src.dir}" destdir="${classes.dir}"
+        	classpathref="classpath" debug="true"/>
+        <copy todir="${classes.dir}">
+            <fileset dir="${src.dir}/main/resources"/>
+        </copy>
+        <copy todir="${classes.dir}">
+            <fileset dir="${src.dir}/main/java" includes="**/*.xml"/>
+        </copy>
+        <copy todir="${classes.dir}/edu/cmu/gizmo/management/capability">
+            <fileset dir="${src.dir}/main/java/edu/cmu/gizmo/management/capability" includes="**/*.mf"/>
+        </copy>
+    </target>
+    
+    <target name="runTaskManager" depends="compile">
+    	<java fork="true" classname="edu.cmu.gizmo.management.taskmanager.TaskManager" 
+    		  classpath="${classes.dir}">
+    		<classpath>
+                <path refid="classpath"/>
+            </classpath>
+    	</java>
+    </target>
+    
+    <target name="runCobotMock" depends="compile">
+    	<java fork="true" classname="edu.cmu.gizmo.mocks.MockCobot" 
+    		  classpath="${classes.dir}">
+    		<classpath>
+                <path refid="classpath"/>
+            </classpath>
+    	</java>
+    </target>
+	<target name="undeploy">
+		<delete dir="${webapp.dir}"/>
+	</target>
+	<target name="deploy" depends="compile,undeploy">
+		<mkdir dir="${webapp.dir}"/>
+		<copy todir="${webapp.dir}">
+			<fileset dir="WebContent"></fileset>
+		</copy>
+	</target>
+</project>

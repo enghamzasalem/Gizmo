@@ -1,0 +1,10 @@
+# robot can be cobot3 or none
+robot.exist=true
+capability.directory=edu.cmu.gizmo.management.capability
+#ui=goToRoom.jsp
+#ui.class=edu.cmu.gizmo.management.capability.goToRoomObserver.class
+#main.class=edu.cmu.gizmo.management.capability.goToRoomDriveCapability.class
+ui.class=edu.cmu.gizmo.management.taskclient.observers.GoToRoomObserver
+ui.display=goToRoom.jsp
+output.name=room
+parameter.name=room

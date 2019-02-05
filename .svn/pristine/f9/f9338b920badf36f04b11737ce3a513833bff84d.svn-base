@@ -1,0 +1,568 @@
+package edu.cmu.gizmo.unittest;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import javax.jms.MessageListener;
+import javax.jms.MessageProducer;
+import javax.jms.ObjectMessage;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.robot.Robot;
+import edu.cmu.gizmo.management.taskbus.GizmoTaskBus;
+import edu.cmu.gizmo.management.taskbus.messages.CancelTaskMessage;
+import edu.cmu.gizmo.management.taskbus.messages.CapabilityInputMessage;
+import edu.cmu.gizmo.management.taskbus.messages.HeloClientMessage;
+import edu.cmu.gizmo.management.taskbus.messages.LoadTaskMessage;
+import edu.cmu.gizmo.management.taskbus.messages.StartCapabilityMessage;
+import edu.cmu.gizmo.management.taskbus.messages.TaskMessage;
+import edu.cmu.gizmo.management.taskbus.messages.TaskReadyMessage;
+import edu.cmu.gizmo.management.taskmanager.TaskExecutor.TaskType;
+import edu.cmu.gizmo.management.taskmanager.TaskManager;
+import edu.cmu.gizmo.management.taskmanager.TaskManager.TaskRequester;
+import edu.cmu.gizmo.management.taskmanager.TaskReservation;
+
+public class TestTaskManager extends TestCase {
+	private MockCobotForTestTaskManager cobot;
+	private MockTaskClientForTestTaskManager client;
+	private TaskManager manager;
+	
+	public void setUp() { 
+		cobot = new MockCobotForTestTaskManager();
+		cobot.start();
+	
+		client = new MockTaskClientForTestTaskManager();
+		manager = new TaskManager();
+	}
+	
+	public void tearDown() { 
+	
+//		cobot.kill();
+//
+//		client.endTasks();
+//		client.unload();
+//		managerDriver.kill();
+	}
+	
+	/**
+	 * Safe sleep.
+	 *
+	 * @param time the time
+	 */
+	private void testSleep(long time) {
+		try { Thread.currentThread().sleep(time); }
+		catch (InterruptedException e) { }
+	}
+	
+	public void testShouldStartNewTaskWhenReceivingLoadTask() {
+		client.setInput("1");
+		client.loadNewTask();
+		
+		testSleep(3000);
+		assertTrue(client.getTaskRunning());
+		
+	}
+	
+	public void testShouldSendTaskReadyAfterTaskStrategyLoaded() {
+		
+		client.setInput("1");
+		client.loadNewTask();		
+		testSleep(3000);
+		assertTrue(client.getGotReadyMessage());
+		
+	}
+	
+	/**
+	 * This test ensures that tasks end gracefully when the back-end capability 
+	 * indicates that a task is complete
+	 */
+	public void testShouldGetTaskCompleteMessageWhenTaskEndsSuccessfully() {
+		client.setInput("1");
+		client.loadNewTask();
+		
+		testSleep(3000);
+		assertTrue(client.isCompleted());
+	}
+		
+	/** 
+	 * This test ensures that tasks ends gracefully when the user cancels them
+	 */
+	public void testShouldCancelTaskWhenCancelTaskMessageReceived() {
+		
+		client.loadNewTask();
+		testSleep(5000);
+		
+		assertTrue(client.getGotReadyMessage());
+		client.endTasks();
+		
+		testSleep(3000);
+		
+		assertTrue(client.isTerminated());
+	}
+	
+	/**
+	 * captures the fact that the Task Manager is responsible for establishing a 
+	 * connection with the robot  
+	 */
+	public void testShouldEstablishTaskIOConnecionConnectionWithTheRobotOn4242Tcp() {
+		client.loadNewTask();
+		testSleep(1000);
+		assertTrue(cobot.isConnected4242());
+		
+	}
+	
+	public void testShouldEstablishTaskRequestConnecionConnectionWithTheRobotOn4244Tcp() {
+		client.loadNewTask();
+		testSleep(1000);
+		assertTrue(cobot.isConnected4244());
+	}
+	
+	/**
+	 * The TaskManager needs to know the originator of a task request to be able 
+	 * to respond in the presence of multiple tasks
+	 */
+	public void testShouldKnowTheSourceOfATaskRequest() { 
+		client.loadNewTask();
+		testSleep(3000);
+		
+		// the TASK_READY message reflects the requester of the task
+		assertTrue(client.isReadyMsgRequesterCorrect());
+	}
+	
+	public void testShouldInterruptAndCancelUserTasksWhenRobotIndicatesBatteryLow() {
+		
+		client.setInput("10");
+		client.loadNewTask();
+		testSleep(1000);
+		
+		cobot.triggerRobotTask();
+		
+		testSleep(3000);
+		assertTrue(client.isTerminated());
+	}
+	
+	/** 
+	 * This test case ensures that a new task will be started to respond to a low 
+	 * battery 
+	 */
+	public void testShouldSendRobotToHomebaseWhenBatteryLow() {
+		client.setInput("50");
+		client.loadNewTask();
+		testSleep(5000);
+		
+		cobot.triggerRobotTask();
+		
+		testSleep(7000);
+		
+		//
+		assertTrue(cobot.gotGTR274Command());
+	}
+	
+	/** 
+	 * This test case ensures that a new task will be started to respond to a low 
+	 * battery 
+	 */
+	public void testShouldRejectConflictingTaskRequestAndThenInformClientOfRejectedTask() {
+		client.setInput("50");
+		client.loadNewTask();
+		testSleep(5000);
+		
+		cobot.triggerRobotTask();
+		
+		testSleep(7000);
+		
+		assertTrue(cobot.gotGTR274Command());
+		
+		client.loadNewTask();
+		
+		testSleep(5000);
+		assertTrue(client.isRejected());
+		
+	}
+	
+	
+	// -------------------------------------------------------------------------
+	
+	/**
+	 * Mockup for task client 
+	 * @author jsg
+	 *
+	 */
+	class MockTaskClientForTestTaskManager {
+		
+		private GizmoTaskBus bus; 
+		private MessageConsumer sub; 
+		private MessageProducer pub;
+		private Boolean gotReadyMessage;
+		private Boolean taskRunning;
+		private Boolean terminated;
+		private Boolean rejected;
+		private Boolean taskComplete;
+		private Boolean readyMsgRequestorCorrect;
+		private Integer taskId;
+		private String inputVal = "5"; 
+		
+		public void setInput(String input)  { 
+			this.inputVal = input;
+		}
+		
+		public MockTaskClientForTestTaskManager() { 
+			
+			gotReadyMessage = false;
+			taskRunning = false;
+			terminated = false;
+			taskComplete = false;
+			rejected = false;
+			readyMsgRequestorCorrect = false;
+			
+			bus = GizmoTaskBus.connect();
+			
+			final String[]  subs = {
+					TaskMessage.TASK_READY, 
+					TaskMessage.HELO_CLIENT,
+					TaskMessage.CANCEL_TASK,
+					TaskMessage.REJECT_TASK,
+					TaskMessage.TASK_COMPLETE
+			};
+			
+			sub = bus.getTaskConsumer(subs);
+			pub = bus.getTaskProducer();			
+			
+			try {
+				sub.setMessageListener(new MessageListener() {
+					
+					@Override
+					public void onMessage(Message message) {
+
+						final ObjectMessage objMessage = (ObjectMessage) message;
+						TaskMessage tm = null;
+						try {
+							tm = (TaskMessage) objMessage.getObject();
+						} catch (JMSException e) {
+							e.printStackTrace();
+						}
+
+						if (tm.getMessageType() == TaskMessage.TASK_READY) {
+							gotReadyMessage = true;	
+							TaskReadyMessage ready = (TaskReadyMessage) tm;
+							taskId = ready.getTaskId();
+							
+							if (ready.getReservation().getTaskRequester() == TaskRequester.TASK_CLIENT) {
+								readyMsgRequestorCorrect = true;
+							}
+								
+						}
+						else if (tm.getMessageType() == TaskMessage.REJECT_TASK) {
+							rejected = true;									
+						}
+						else if (tm.getMessageType() == TaskMessage.HELO_CLIENT) {
+							HeloClientMessage helo = (HeloClientMessage) tm;
+							
+							ConcurrentHashMap<Object,Object> input = 
+								new ConcurrentHashMap<Object, Object>();
+							
+							input.put("input1", inputVal);
+							
+							taskRunning = true;
+							
+							CapabilityInputMessage inputMsg = 
+								new CapabilityInputMessage(taskId, 
+										helo.getCapabilityId(),
+										input);
+							
+							try {
+								pub.send(bus.generateMessage(inputMsg,
+										TaskMessage.CAPABILITY_INPUT));
+
+
+								StartCapabilityMessage start = 
+									new StartCapabilityMessage(taskId, 
+											helo.getCapabilityId());
+								
+								pub.send(bus.generateMessage(start, 
+										TaskMessage.START_CAPABILITY));
+								
+							} catch (JMSException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+							
+						} 
+						else if (tm.getMessageType() == TaskMessage.CANCEL_TASK) {
+							CancelTaskMessage cancel = (CancelTaskMessage) tm;
+							if (cancel.getRequester() == TaskRequester.TASK_MANAGER) {
+								terminated = true;
+							}
+						}
+						else if (tm.getMessageType() == TaskMessage.TASK_COMPLETE) {
+							taskComplete = true;
+						}
+
+					}
+				});
+			} catch (JMSException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		public boolean isRejected() {
+			return rejected;
+		}
+		
+		public boolean isReadyMsgRequesterCorrect() {
+			return readyMsgRequestorCorrect;
+		}
+		
+		public boolean isCompleted() {
+			return taskComplete;
+		}
+
+		public boolean isTerminated() {
+			return terminated;
+		}
+
+		public void loadNewTask() {
+			
+			TaskReservation rsvp =  
+				new TaskReservation(
+						"Test Find Jane",
+						1,
+						TaskRequester.TASK_CLIENT,
+						(ConcurrentHashMap<Object,Object>)null,
+						TaskType.LOGIC_TASK,
+						"Communicate"); 	
+			
+			System.out.println("[MockTaskClient] Starting new task");
+			
+			// send the load task message for this reservation
+			try {
+
+				final LoadTaskMessage loadMessage =
+					new LoadTaskMessage(rsvp);
+
+				pub.send(bus.generateMessage(loadMessage,
+						TaskMessage.LOAD_TASK));
+			
+			} 
+			catch (final Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+		public void endTasks()  {
+			final CancelTaskMessage kill =
+				new CancelTaskMessage(taskId, 
+						TaskRequester.TASK_CLIENT,
+						"MockClinet killed tasks");
+			
+			try {
+				pub.send(
+						bus.generateMessage(
+								kill, TaskMessage.CANCEL_TASK));
+			} catch (JMSException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		public Boolean getGotReadyMessage() {
+			return gotReadyMessage;
+		}
+
+		public Boolean getTaskRunning() {
+			return taskRunning;
+		}
+		
+		public void unload() { 
+			bus.releaseConsumer(sub);
+			bus.releaseProducer(pub);
+			bus.disconnect();
+		}
+	};
+	
+	/**
+	 * Dummy CoBot server.
+	 *
+	 * @author jsg
+	 */
+	class MockCobotForTestTaskManager extends Thread implements Robot {
+		
+		/** The Constant INVALID_ROOM. */
+		public static final String INVALID_ROOM = "888";
+		
+		/** The s. */
+		private Socket socket;
+		
+		private Socket taskSocket;
+		
+		/** The running. */
+		private Boolean running;
+		
+		private Boolean connected4242;
+		
+		private Boolean connected4244;
+		
+		private Boolean gotGTR;
+		
+		/** The got drive command. */
+		private Boolean gotDrive274Command;
+		
+		private PrintWriter taskRequester;
+
+		/**
+		 * Instantiates a new mock cobot.
+		 */
+		public MockCobotForTestTaskManager() {
+			gotDrive274Command = false;
+		}
+
+		public boolean gotGTR274Command() {
+			return gotDrive274Command;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.lang.Thread#run()
+		 */
+		public void run() {
+			try {
+				
+				System.out.println("trying to connect to the server");
+				
+				socket = new Socket();
+				SocketAddress sockaddr = new InetSocketAddress("localhost", 4242);
+				connected4242 = false;
+				socket.connect(sockaddr);
+				connected4242 = true;
+				
+				System.out.println("connected");
+				
+				connected4244 = false;
+				taskSocket= new Socket();
+				SocketAddress sockaddr2 = new InetSocketAddress("localhost", 4244);
+				taskSocket.connect(sockaddr2);
+				connected4244 = true;
+				
+				System.out.println("connected task proxy");
+				
+				running = true;
+				Integer counter = 0;
+
+				taskRequester  = 
+					new PrintWriter(taskSocket.getOutputStream());
+				
+				PrintWriter w = new PrintWriter(
+						socket.getOutputStream());
+
+				BufferedReader r = new BufferedReader(
+						new InputStreamReader(
+								socket.getInputStream()));
+						
+				while (running) {					
+					
+					char[] in = new char[1024];
+
+					System.out.println("[TestCobot] Waiting for command");
+					r.read(in,0,1024);
+					String cmd = String.valueOf(in);
+					
+					String[] arr = cmd.split(",");
+
+					System.out.println("CMD: " + cmd);
+					if (arr[0].equals("MoveCamera")) {
+						System.out.println("MoveCamera received");
+					}	
+					else if (arr[0].equals("GoToRoom")) {
+						String room = arr[1].trim();
+												
+						if (room.equals("274")) {
+							gotDrive274Command = true;
+						}
+						if (counter < 5) {
+							if (arr[1].trim().equals(INVALID_ROOM)) {
+								w.println("invalid room");
+							}
+							else { 
+								w.println("success,42");
+							}
+						}
+					}
+					else if (arr[0].equals("status") && counter < 5) {
+						if (arr[1].trim().equals("42")) {
+							w.println("running,Moving & happy");
+						} 
+						else {
+							w.println("does not exist");
+						}
+						counter++;
+					}
+					else {
+						w.println("complete,hi majed");
+						counter = 0;
+					}
+					w.flush();
+				}
+			} catch (IOException e) {
+
+			}			
+		}
+
+		
+		public synchronized void triggerRobotTask() {
+			
+			System.out.println("TestTaskManagerCobot] sending request");
+			taskRequester.println("PROB");
+			taskRequester.flush();
+		}
+		
+		/**
+		 * Checks if is got drive command.
+		 *
+		 * @return the boolean
+		 */
+		public Boolean isGotDriveCommand() { 
+			return gotDrive274Command;
+		}
+
+		public Boolean isConnected4244() { 
+			return connected4244;
+		}
+		
+		public Boolean isConnected4242() { 
+			return connected4242;
+		}
+		/**
+		 * Kill.
+		 */
+		public void kill() { 
+			running=false;
+			try {
+				
+				socket.close();
+				taskSocket.close();
+				
+			} catch (IOException e) {
+
+			}
+		}
+
+		@Override
+		public void connect(Socket connection) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void disconnect() {
+			// TODO Auto-generated method stub
+			
+		}
+	};
+}

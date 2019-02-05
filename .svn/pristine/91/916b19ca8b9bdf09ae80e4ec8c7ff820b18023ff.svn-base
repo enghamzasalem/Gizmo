@@ -1,0 +1,411 @@
+/*
+ * MockTaskUIDriver.java Jul 10, 2012 1.0
+ */
+package edu.cmu.gizmo.mocks;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
+import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Observable;
+import java.util.Observer;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+
+import edu.cmu.gizmo.management.taskclient.TaskClient;
+import edu.cmu.gizmo.management.taskmanager.TaskExecutor.TaskType;
+import edu.cmu.gizmo.management.taskmanager.TaskManager.TaskRequester;
+import edu.cmu.gizmo.management.taskmanager.TaskReservation;
+
+
+/**
+ * The Class MockTaskUIDriver.
+ */
+public class MockTaskUIDriver implements Observer {
+	
+	/** The client. */
+	private TaskClient client;
+	
+	private JTextArea output;
+	
+	/** The frame. */
+	private JFrame frame;
+	
+	/** The label. */
+	private JLabel label;
+	
+	private JButton startTaskButton;
+	
+	/** The dashboard id. */
+	private Integer dashboardId;
+
+	private ConcurrentHashMap<Object,Object> defaultInput;
+	
+	/**
+	 * Run driver.
+	 */
+	public void runDriver() {
+		client = new TaskClient();
+		client.addObserver(this);
+			
+		BufferedReader br = 
+			new BufferedReader(new InputStreamReader(System.in));
+		try {
+			br.readLine();
+		} catch (IOException ioe) {
+			System.exit(1);
+		}
+		
+		client.loadDashboard();
+		
+		System.out.println(
+				"[MockTaskUIDriver] Task Client started ... "
+				+ "press enter to start a task");
+		
+	}
+	
+	private JFrame createUI() { 
+		//1. Create the frame.
+		frame = new JFrame("CoBot 3 Dashboard");
+		label = new JLabel("No task");
+		output = new JTextArea(5, 20);
+		output.setBackground(new Color(255,255,255));
+		
+		startTaskButton = new JButton("start");
+		
+		startTaskButton.addActionListener(new ActionListener() {
+			
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				if (startTaskButton.getText().equals("start")) { 
+				
+					client.loadNewTask(  
+							new TaskReservation(
+									"Find Jane",
+									1,
+									TaskRequester.TASK_CLIENT,
+									(ConcurrentHashMap<Object,Object>)null,
+									TaskType.SCRIPT_TASK,
+									new String("leg3demo_seq.xml")
+							)
+					); 		
+
+					startTaskButton.setText("continue");
+					startTaskButton.setEnabled(false);
+				}
+				else if (startTaskButton.getText().equals("continue")) {
+					
+					label.setText("Continuing");
+					client.continueTask();
+					startTaskButton.setEnabled(false);
+				}
+				
+			}
+		});
+		
+		frame.setSize(100, 100);
+		
+		//2. Optional: What happens when the frame closes?
+		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+		output = new JTextArea(5, 20);
+		output.setBackground(new Color(255,255,255));
+		
+		frame.getContentPane().add(label, BorderLayout.CENTER);
+		frame.getContentPane().add(startTaskButton, BorderLayout.SOUTH);
+		frame.getContentPane().add(new JScrollPane(output), BorderLayout.EAST);
+		//4. Size the frame.
+		frame.pack();
+
+		frame.setSize(500, 500);
+		frame.setVisible(true);
+		
+		frame.addWindowListener(new WindowListener() {
+
+			@Override
+			public void windowActivated(WindowEvent arg0) {
+				// TODO Auto-generated method stub
+				
+			}
+
+			@Override
+			public void windowClosed(WindowEvent arg0) {
+				
+			}
+
+			@Override
+			public void windowClosing(WindowEvent arg0) {
+				client.endTasks();
+			}
+
+			@Override
+			public void windowDeactivated(WindowEvent arg0) {
+				// TODO Auto-generated method stub
+				
+			}
+
+			@Override
+			public void windowDeiconified(WindowEvent arg0) {
+				// TODO Auto-generated method stub
+				
+			}
+
+			@Override
+			public void windowIconified(WindowEvent arg0) {
+				// TODO Auto-generated method stub
+				
+			}
+
+			@Override
+			public void windowOpened(WindowEvent arg0) {
+				// TODO Auto-generated method stub
+				
+			} 
+			
+		});
+		
+		output.addKeyListener(new KeyListener() {
+
+			@Override
+			public void keyPressed(KeyEvent e) {
+				Float[] point = { new Float(0.0), new Float(0.0) };
+				
+				if (e.getKeyCode() == KeyEvent.VK_E) {
+				
+					output.append("TRIGGERED EMERGENCY\n");
+					
+					ConcurrentHashMap<Object,Object> em =
+						new ConcurrentHashMap<Object,Object>();
+					em.put("emergency", "emergency");
+					client.sendInput(dashboardId, 0, em);
+					
+					return;
+				}
+				
+				if (e.getKeyCode() == KeyEvent.VK_F) {
+					point[0] = (float) 0.10;
+					point[1] = (float) 0.00;
+					ConcurrentHashMap<Object,Object> in =
+						new ConcurrentHashMap<Object,Object>();
+					output.append("Move forward\n");
+					in.put("moveCobot", point);
+					
+					client.sendInput(dashboardId, 0, in);
+					return;
+				}			
+				else if (e.getKeyCode() == KeyEvent.VK_L) {
+					
+					point[1] = (float) 0.25;
+					point[0] = (float) 0.00;
+					output.append("Move left\n");
+					ConcurrentHashMap<Object,Object> in =
+						new ConcurrentHashMap<Object,Object>();
+					in.put("moveCobot", point);
+					
+					client.sendInput(dashboardId, 0, in);
+					return;
+				}
+				else if (e.getKeyCode() == KeyEvent.VK_R) {
+					
+					point[1] = (float) -0.25;
+					point[0] = (float) 0.00;
+					output.append("Move right\n");
+					ConcurrentHashMap<Object,Object> in =
+						new ConcurrentHashMap<Object,Object>();
+					in.put("moveCobot", point);
+					
+					client.sendInput(dashboardId, 0, in);
+					return;
+				}
+				
+				if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
+					point[0] = (float) 0.25;
+				}			
+				else if (e.getKeyCode() == KeyEvent.VK_LEFT) {
+					
+					point[0] = (float) -0.25;
+				}
+				else if (e.getKeyCode() == KeyEvent.VK_UP) {
+					
+					point[1] = (float) 0.25;
+				}
+				else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+					
+					point[1] = (float) -0.25;
+				}	
+				ConcurrentHashMap<Object,Object> in =
+					new ConcurrentHashMap<Object,Object>();
+				in.put("camera", point);
+				
+				client.sendInput(dashboardId, 0, in);
+			}
+
+			@Override
+			public void keyReleased(KeyEvent arg0) {
+				// TODO Auto-generated method stub
+				
+			}
+
+			@Override
+			public void keyTyped(KeyEvent e) {
+				
+			}					
+		});				
+
+		return frame;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.util.Observer#update(java.util.Observable, java.lang.Object)
+	 */
+	@SuppressWarnings("deprecation")
+	@Override
+	public void update(Observable arg0, Object arg) {
+		ConcurrentHashMap<Object,Object>msg = (ConcurrentHashMap<Object,Object>) arg;
+
+		// got the message to show the UI
+		if (msg.get("cmd") == TaskClient.TaskClientCommands.LOAD_UI) {
+
+			String cName = (String) msg.get("name");
+			Integer taskId = (Integer) msg.get("taskId");
+			Integer capabilityId = (Integer) msg.get("capabilityId");
+			if (msg.containsKey("defaultInput")) {
+				defaultInput =  (ConcurrentHashMap<Object, Object>) msg.get("defaultInput");
+			}
+			
+			if (cName.equalsIgnoreCase("Cobot3DashboardCapability")) {
+				frame = createUI();
+				output.append("showing dashboard\n");
+				dashboardId = (Integer) taskId;				
+			} 
+			else {
+				if (cName.equals("QueryGoogleCalendarCapability")) {
+					
+					String person = 
+						JOptionPane.showInputDialog(
+							"[TASK:"+taskId+"-CAP:"
+							+capabilityId+"]\n"+ cName + "\nEnter name");
+					
+					String startTime = "2012-07-09T00:00:00"; 					
+					String endTime = "2012-07-10T23:59:59";
+					
+					msg = new ConcurrentHashMap<Object,Object>();
+					msg.put("personName", person);
+					msg.put("startTime", startTime);
+					msg.put("endTime", endTime);
+					
+					client.sendInput(taskId, capabilityId, msg);
+				}
+				else {
+					String ui = (String) msg.get(cName);
+					
+					Object room = null;
+					if (defaultInput.containsKey("Room")) {
+						room = defaultInput.get("Room");
+					}				
+					
+					String input = 
+						JOptionPane.showInputDialog(
+								"[TASK:"+taskId+"-CAP:"
+								+capabilityId+"]\n"+ cName);
+					if (input == null) {
+						output.append("Using default input: " + room + "\n");
+						input = (String) room;
+					}			
+					if (input != null) {
+
+						msg = new ConcurrentHashMap<Object,Object>();
+						//if (cName.equals("SkypeCommunicationCapability"))
+						msg.put("input1", input);
+						//	else 
+						msg.put("room", input);
+						client.sendInput(taskId, capabilityId, msg);
+					}
+				}
+			}		
+		}
+		
+		else if (msg.get("cmd") == TaskClient.TaskClientCommands.UNLOAD_UI) {
+			label.setText("Capability complete");
+			startTaskButton.setEnabled(true);
+			
+			output.append("unloaded UI: "+msg.get("reason") +"\n");	
+		}
+		
+		else if (msg.get("cmd") == TaskClient.TaskClientCommands.OUTPUT) {
+		
+			Integer tid = (Integer) msg.get("taskId");
+			if (tid == 0) {
+				
+				ConcurrentHashMap<Object, Object>out = 
+					(ConcurrentHashMap<Object, Object>) msg.get("output");
+				
+				
+				byte[] b = (byte[]) out.get("image");
+				BufferedImage image;
+				try {
+					image = ImageIO.read(
+							new ByteArrayInputStream(b)
+					);						 
+					if (image != null) {
+						label.setIcon(new ImageIcon(image));
+						if (frame != null)
+							frame.repaint();
+					}
+				
+				} catch (IOException e) {
+					e.printStackTrace();
+				}	
+			}
+			else {
+				ConcurrentHashMap<Object, Object>out = 
+					(ConcurrentHashMap<Object, Object>) msg.get("output");
+
+				final Iterator<Map.Entry<Object, Object>> entries = out
+				.entrySet().iterator();
+
+				final StringBuffer buf = new StringBuffer();
+				// send each input parameter to the extending capability
+				while (entries.hasNext()) {
+					final Map.Entry<Object, Object> entry = entries.next();
+					buf.append((String) entry.getKey());
+					buf.append(" = ");
+					buf.append((String) entry.getValue());
+				}
+				
+				output.append(buf.toString() + "\n");
+			}
+		}
+		output.setCaretPosition(output.getDocument().getLength());
+	}	
+
+	/**
+	 * The main method.
+	 *
+	 * @param args the arguments
+	 */
+	public static void main(String[] args) {
+		MockTaskUIDriver driver = new MockTaskUIDriver();
+		driver.runDriver();
+	}
+}
+

@@ -1,0 +1,59 @@
+<!DOCTYPE struts PUBLIC
+    "-//Apache Software Foundation//DTD Struts Configuration 2.0//EN"
+    "http://struts.apache.org/dtds/struts-2.0.dtd">
+
+<struts><!-- Configuration for the default package. -->
+
+	 <constant name="struts.devMode" value="true" />
+	 <constant name="struts.enable.DynamicMethodInvocation" value="false" />
+	 
+	<package name="gizmo" extends="struts-default">
+		
+		
+       <action name="taskSelector" 
+       		   class="edu.cmu.gizmo.management.taskclient.actions.TaskSelectorAction">
+            <result>/taskSelector.jsp</result>
+        </action>
+        
+        <action name="taskClient" 
+       		   class="edu.cmu.gizmo.management.taskclient.actions.TaskClientAction">
+            <result name="success">/taskClient.jsp</result>
+            
+            <result name="streamVideo" type="stream">
+			  <param name="contentType">image/jpeg</param>
+			  <param name="inputName">inputStream</param>
+			  <param name="contentDisposition">attachment;filename="vidImg.jpeg"</param>
+			  <param name="bufferSize">1024</param>
+			</result>
+			
+        </action>
+        <action name="getPrimitives"
+        	class = "edu.cmu.gizmo.management.taskorchestration.actions.OrchestrationAction">
+        	<result name = "success">/taskOrchestration.jsp</result>
+        	</action>
+    </package>
+    
+    
+    <package name ="gizmojason" extends="json-default">
+       
+        <action name="taskClient" 
+       		   class="edu.cmu.gizmo.management.taskclient.actions.TaskClientAction">
+            <result name="success">/taskClient.jsp</result>
+            <result name="streamUpdate" type="json">
+            	<param name="excludeNullProperties">
+            		true
+            	</param>
+            </result>
+            <result name="streamOutput" type="json">
+			</result>
+			<result name="streamDefaultInput" type="json">
+			</result>
+        </action>
+        
+        <action name="orchestration"
+        	class = "edu.cmu.gizmo.management.taskorchestration.actions.OrchestrationAction">
+        	<result name="success">/taskOrchestration.jsp</result>
+        	<result name = "streamResults" type="json"></result>
+        	</action>
+    </package>
+</struts>

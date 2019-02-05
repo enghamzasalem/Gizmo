@@ -1,0 +1,105 @@
+/*
+ * TestSkypeCommunicationCapability.java Jul 10, 2012 1.0
+ */
+package edu.cmu.gizmo.unittest;
+
+import java.util.Calendar;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.jms.JMSException;
+import javax.jms.MessageProducer;
+import javax.jms.ObjectMessage;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.capability.Capability;
+import edu.cmu.gizmo.management.capability.Capability.CapabilityStatus;
+import edu.cmu.gizmo.management.capability.SkypeCommunicationCapability;
+import edu.cmu.gizmo.management.taskbus.GizmoTaskBus;
+import edu.cmu.gizmo.management.taskbus.messages.StartCapabilityMessage;
+import edu.cmu.gizmo.management.taskbus.messages.TaskMessage;
+
+
+/**
+ * The Class TestSkypeCommunicationCapability.
+ */
+public class TestSkypeCommunicationCapability extends TestCase {
+	
+	/** The c. */
+	private Capability c;
+	
+	/** The bus. */
+	private GizmoTaskBus bus;
+	
+	private ConcurrentHashMap<Object,Object> defaultSettings;
+	
+	/** basic input */
+	private ConcurrentHashMap<Object,Object> input;
+	
+	/* (non-Javadoc)
+	 * @see junit.framework.TestCase#setUp()
+	 */
+	public void setUp() {
+		System.out.println("***");
+		// set up unconnected dummy robot
+		c = new SkypeCommunicationCapability();
+		bus = GizmoTaskBus.connect();
+		defaultSettings = new ConcurrentHashMap<Object, Object>();
+		input  = new ConcurrentHashMap<Object, Object>();
+		defaultSettings.put(Capability.UI_CLASS, "XXX");
+		defaultSettings.put(Capability.UI_DISPLAY, "YYY");
+	}
+	
+	/* (non-Javadoc)
+	 * @see junit.framework.TestCase#tearDown()
+	 */
+	public void tearDown() {
+		c.unload();
+		bus.disconnect();
+	}
+	
+	/**
+	 * Safe sleep.
+	 *
+	 * @param time the time
+	 */
+	private void safeSleep(long time) {
+		try { Thread.sleep(time); }
+		catch (InterruptedException e) { }
+	}
+	
+	/**
+	 * Test capability should wait at least as long as specified in input before being marked complete.
+	 */
+	public void testCapabilityShouldWaitAtLeastAsLongAsSpecifiedInInputBeforeBeingMarkedComplete() {
+		c.load(42, 42, defaultSettings);
+		
+		String time = "5";
+		input.put("input1", time);
+		c.setInput(input);
+		c.launch();
+
+		// send the start message
+		MessageProducer p = bus.getTaskProducer();
+		ObjectMessage m = bus.generateMessage(
+				new StartCapabilityMessage(42, 42),
+				TaskMessage.START_CAPABILITY);
+		try {
+			p.send(m);
+		} catch (JMSException e) {
+			e.printStackTrace();
+		}
+		
+		Calendar cal = Calendar.getInstance();
+		Long mark1 = cal.getTimeInMillis();
+		
+		while (c.getStatus() != CapabilityStatus.COMPLETE) {
+			safeSleep(10);
+		}
+		cal = Calendar.getInstance();
+		Long mark2 = cal.getTimeInMillis();
+		
+		Long deltaInSecs = (mark2 - mark1) * 1000;
+		assertTrue("Delta: " + deltaInSecs, deltaInSecs > Integer.parseInt(time));
+	}
+	
+}

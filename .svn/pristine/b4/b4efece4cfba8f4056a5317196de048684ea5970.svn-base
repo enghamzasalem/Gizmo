@@ -1,0 +1,135 @@
+<%@ page language="java" contentType="text/html; charset=ISO-8859-1"
+    pageEncoding="ISO-8859-1"%>
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<%@ taglib prefix="s" uri="/struts-tags" %>
+<%@ taglib uri="http://java.sun.com/jstl/core" prefix="c"%>
+
+<html>
+<head>
+	
+	<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js">
+	</script>
+	<script src="http://code.jquery.com/ui/1.8.21/jquery-ui.min.js" type="text/javascript"></script>
+	<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.21/themes/base/jquery-ui.css" type="text/css" media="all" />
+	<script type="text/javascript" src="http://trentrichardson.com/examples/timepicker/jquery-ui-timepicker-addon.js"></script>
+	<script type="text/javascript">
+	$(document).ready(function(){
+		var outputInterval = setInterval(function(){$.getJSON("http://"+ document.location.host + "/gizmoapp/taskClient.action?action=updateUIStatus"
+		  , 
+	  function(data) {
+			
+	  		var taskStatusCode = data.taskClientObserver.taskStatus;
+	  		
+	  		if (taskStatusCode == 'REJECTED')
+	  		{
+	  			//show the status message in the page
+	  			alert('Task execution rejected. Reason: ' + data.taskClientObserver.taskStatusMessage);
+	  			clearInterval(outputInterval);
+	  			return;
+	  			//Maybe return?, but this will not show the dashboard
+	  		}
+	  		
+		 	$.each(data.taskClientObserver.capabilityObservers,
+				 function()
+				 {
+					 var taskIdParam = this.taskId;
+					 var cpIdParam = this.capabilityId;
+					 var cpElementId = this.taskId + '_x_' +this.capabilityId;
+					 var jQueryCpElementId = '#' + cpElementId;
+					 if ( $(jQueryCpElementId).length > 0) //it's already there!
+					 {
+						 if(this.status == 'ENDED')
+						 {
+							 $(jQueryCpElementId).remove();
+						 }
+						 if(this.status == 'COMPLETED')
+						 {
+							 if($("#endBtn").length < 1) {
+								 $(jQueryCpElementId).append("<br/><button id='endBtn'>Continue!</button>");
+								 $("#endBtn").click(
+										 function()
+										 {
+											 $.ajax({
+													url: "http://"+ document.location.host + "/gizmoapp/taskClient.action?action=completeCapability",
+													data: { taskId: taskIdParam, 
+														   capabilityId:  cpIdParam
+														   }
+												});
+										 }
+									);
+								 }
+							 }
+							 
+					 }
+					 else //it's not there yet, so create it
+					 {
+						 if(this.status == 'STARTED')
+						 {
+							 if( $("#loadingTxt").length > 0 )
+							 {
+								 $("#loadingTxt").remove();
+							 }
+							 $("#cpPlayground").append("<div id='"+cpElementId+"' style='border-style: solid;border-color: gray;margin:10px;'/>");
+							 $(jQueryCpElementId).attr('title', this.capabilityName);
+							 $(jQueryCpElementId).load(this.capabilityUiDirectory);
+						 }
+						
+					 }
+					 
+				 }
+		   )
+		   
+		   if (taskStatusCode == 'CANCELLED')
+	  		{
+	  			//show status message in the page
+	  			alert('Task execution cancelled. Reason: ' + data.taskClientObserver.taskStatusMessage);
+	  			clearInterval(outputInterval);
+	  			return;
+	  		}
+		 	
+		 	if (taskStatusCode == 'COMPLETED')
+	  		{
+	  			//show the status message in the page
+	  			alert('The task has been successfuly completed!');
+	  			clearInterval(outputInterval);
+	  			return;
+	  			//Maybe return?, but this will not show the dashboard
+	  		}
+		 
+		    
+	  })}, 1000);
+	  });
+
+	  function getCapabilityId(cpElementId)
+	  {
+		  var idsArray = cpElementId.split('_x_');
+		  return idsArray[1];
+	  }
+	  
+	  function getTaskId(cpElementId)
+	  {
+		  var idsArray = cpElementId.split('_x_');
+		  return idsArray[0];
+	  }
+		  
+	</script>
+	
+	<title>Task Execution Page</title>
+</head>
+<body>
+	<table width="100%">
+			<tr>
+				<td width="100%"><h1>SCS Telepresence Robot</h1></td>
+				<td><img src="Gizmo_logo_lg.png" align="right" alt="logo"/></td>
+			</tr>
+		</table>
+		<hr />
+	 
+	<div id="cpPlayground">
+		<p id="loadingTxt"><img id="cameraImage" src="loadingVid.gif" alt=""/></p>
+	</div>
+	
+</body>
+</html>

@@ -1,0 +1,282 @@
+/*
+ * TestCoBot3Robot.java Jul 10, 2012 1.0
+ */
+package edu.cmu.gizmo.management.robot;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+
+import edu.cmu.gizmo.management.robot.RobotFactory.RobotModel;
+import edu.cmu.gizmo.management.robot.exceptions.InvalidCommandException;
+import edu.cmu.gizmo.management.robot.exceptions.InvalidCommandStatusException;
+import edu.cmu.gizmo.management.robot.exceptions.InvalidRoomException;
+import edu.cmu.gizmo.management.robot.exceptions.RobotUnavailableException;
+
+import junit.framework.TestCase;
+
+
+/**
+ * The Class TestCoBot3Robot.
+ */
+public class TestCoBot3Robot extends TestCase {
+	//Those test cases do not cover: 1. closed socket 2. A goal that cannot be accomplished
+	
+//	protected Cobot3Robot robot;
+//	MockCobot2 socket;
+	
+	/* (non-Javadoc)
+	 * @see junit.framework.TestCase#setUp()
+	 */
+	protected void setUp()
+	{
+	}
+	
+	/**
+	 * Test go to room valid room.
+	 */
+	public void testGoToRoomValidRoom()
+	{
+		//assumes that this goal can be accomplished, i.e. the returned value will be "success"
+		//Covers: 1. Valid Room 2.Non-zero command number 3. success is the response
+		MockCobot2 socket = new MockCobot2();
+		socket.start();
+		Cobot3Robot robot = (Cobot3Robot) RobotFactory.newRobot(RobotModel.COBOT3);
+		
+		String roomNumber = "265";
+		try{
+			Cobot3Command command = robot.goToRoom(roomNumber);
+			assertTrue(command.getCmdNumber() != 0);
+		}catch(InvalidRoomException e)
+		{
+			e.printStackTrace();
+		}
+		catch(RobotUnavailableException e)
+		{
+			e.printStackTrace();
+		}
+		catch(InvalidCommandStatusException e)
+		{
+			e.printStackTrace();
+		}
+		
+		
+	}
+	
+	/**
+	 * Test go to room invalid room.
+	 */
+	public void testGoToRoomInvalidRoom()
+	{
+		//Covers: Invalid room
+		
+		
+		MockCobot2 socket = new MockCobot2();
+		socket.start();
+		Cobot3Robot robot = (Cobot3Robot) RobotFactory.newRobot(RobotModel.COBOT3);
+		
+		String roomNumber = "999";
+		try{
+			Cobot3Command command = robot.goToRoom(roomNumber);
+			fail("An InvalidRoomException should have been thrown!");
+		}catch(InvalidRoomException e)
+		{
+			assertNotNull(e.getMessage());
+		}
+		catch(RobotUnavailableException e)
+		{
+			e.printStackTrace();
+		}
+		catch(InvalidCommandStatusException e)
+		{
+			e.printStackTrace();
+		}
+		
+	}
+	
+	/**
+	 * Test get command status valid command id.
+	 */
+	public void testGetCommandStatusValidCommandId()
+	{
+		
+		
+		MockCobot2 socket = new MockCobot2();
+		socket.start();
+		Cobot3Robot robot = (Cobot3Robot) RobotFactory.newRobot(RobotModel.COBOT3);
+		
+		int commandId = 12;
+		
+		Cobot3Command aCommand = new Cobot3Command();
+		aCommand.setCmdNumber(commandId);
+		
+		try {
+			Cobot3CommandStatus status = robot.getCommandStatus(aCommand);
+			assertTrue(status != null);
+		} catch (RobotUnavailableException e) {
+			e.printStackTrace();
+		} catch (InvalidCommandException e) {
+			e.printStackTrace();
+		} catch (InvalidCommandStatusException e)
+		{
+			e.printStackTrace();
+		}
+		
+		
+	}
+	
+	/**
+	 * Test get command status invalid command id.
+	 */
+	public void testGetCommandStatusInvalidCommandId()
+	{
+		
+		
+		MockCobot2 socket = new MockCobot2();
+		socket.start();
+		Cobot3Robot robot = (Cobot3Robot) RobotFactory.newRobot(RobotModel.COBOT3);
+		
+		int commandId = 222;
+		
+		Cobot3Command aCommand = new Cobot3Command();
+		aCommand.setCmdNumber(commandId);
+		
+		try {
+			Cobot3CommandStatus status = robot.getCommandStatus(aCommand);
+			fail("An InvalidCommandException should have been thrown!");
+		} catch (RobotUnavailableException e) {
+			e.printStackTrace();
+		} catch (InvalidCommandException e) {
+			assertNotNull(e.getMessage());
+		}catch (InvalidCommandStatusException e)
+		{
+			e.printStackTrace();
+		}
+		
+		
+	}
+	
+	/**
+	 * Test get command status message.
+	 */
+	public void testGetCommandStatusMessage()
+	{
+		//Covers: 1. Getting the Running command state 2.Checking that the message is set.
+		int commandId = 12;
+		
+		MockCobot2 socket = new MockCobot2();
+		socket.start();
+		Cobot3Robot robot = (Cobot3Robot) RobotFactory.newRobot(RobotModel.COBOT3);
+		
+		Cobot3Command aCommand = new Cobot3Command();
+		aCommand.setCmdNumber(commandId);
+		
+		try {
+			Cobot3CommandStatus status = robot.getCommandStatus(aCommand);
+			try { Thread.sleep(1000); }
+			catch (InterruptedException e) { } 
+			assertTrue(status.getStatusMessage() != null);
+			
+		} catch (RobotUnavailableException e) {
+			e.printStackTrace();
+		} catch (InvalidCommandException e) {
+			e.printStackTrace();
+		} catch (InvalidCommandStatusException e)
+		{
+			e.printStackTrace();
+		}
+		
+		
+		
+	}
+	
+
+	/**
+	 * Dummy CoBot server.
+	 *
+	 * @author jsg
+	 */
+	class MockCobot2 extends Thread {
+		
+		/** The Constant INVALID_ROOM. */
+		public static final String INVALID_ROOM = "999";
+		
+		/** The s. */
+		private Socket s;
+		
+		/** The running. */
+		private Boolean running;
+		
+		/* (non-Javadoc)
+		 * @see java.lang.Thread#run()
+		 */
+		public void run() {
+			try {
+				System.out.println("trying to connect to the server");
+				s = new Socket();
+				SocketAddress sockaddr = new InetSocketAddress("localhost", 4242);
+				s.connect(sockaddr);
+				running = true;
+				while (running) {
+					BufferedReader r = new BufferedReader(
+							new InputStreamReader(
+									s.getInputStream())
+					);
+					char[] in = new char[1024];
+					
+					r.read(in,0,1024);
+					String cmd = String.valueOf(in);
+					
+					PrintWriter w = new PrintWriter(
+							s.getOutputStream());
+					
+					//System.out.println("Dummy Output: "	+ cmd);
+					
+					String[] arr = cmd.split(",");
+					
+					if (arr[0].equals("status")) {
+						if (arr[1].trim().equals("12")) {
+							w.println("running,and happy");
+						} 
+						else {
+							w.println("does not exist");
+						}
+						
+					}
+					else {
+						char a[] = arr[1].toCharArray();
+						if (a[0] == '9' && a[1] == '9' && a[2] == '9') {
+						
+							w.println("invalid room");						
+						}
+						else { 
+							w.println("success,42"); 
+						}
+					}
+					w.flush();
+				}
+				
+			} catch (Exception e) {
+				
+			}			
+		}
+		
+		/**
+		 * Kill.
+		 */
+		public void kill() { 
+			try {
+				running = false;
+				s.close();
+			} catch (IOException e) {
+
+			}
+		}
+	}
+	
+
+}

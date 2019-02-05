@@ -1,0 +1,147 @@
+/*
+ * CapabilityLoader.java 1.0 2012-07-09 
+ */
+package edu.cmu.gizmo.management.taskmanager;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+
+import edu.cmu.gizmo.management.capability.Capability;
+import edu.cmu.gizmo.management.robot.Robot;
+import edu.cmu.gizmo.management.taskmanager.scripttask.Task;
+
+
+/**
+ * This class is used to load a capability object from a specified directory.
+ * 
+ * @version 1.0 2012-07-09
+ * @author Jeff Gennari
+ */
+public class TaskCapabilityLoader  {
+	
+	/** The directory from which to load capabilities. */
+	private String capabilityDirectory;
+	
+	/** The capability loader. */
+	private ClassLoader capabilityLoader;
+
+	private Properties capabilityManifest;
+	
+	private ConcurrentHashMap<Object, Object> config;
+	
+	private Robot robot;
+	
+	/**
+	 * Create a new capability loader for a given directory.
+	 * 
+	 * @param dir the directory to load capabilities from
+	 */
+
+	/**
+	 * Given a capability name create an object of that capability. 
+	 * 
+	 * @param directory where all capabilities are installed 
+	 * @return the loaded capability
+	 */
+
+	/*
+	 * Empty Constructor
+	 */
+	public TaskCapabilityLoader() {
+	}
+
+	/*
+	 * Constructor w/ Robot
+	 */
+	public TaskCapabilityLoader(Robot robot) {
+		this.robot = robot;	
+	}
+
+	/*
+	 * Loads all of the parameters needed for the capability object
+	 * e.g. robot
+	 */
+	public void loadConfiguration(ConcurrentHashMap<Object, Object> config) {
+		System.out.println("[TaskCapabilityLoader] loadConfiguration: In loadConfiguration Before config");
+		this.config = config;
+		System.out.println("[TaskCapabilityLoader] In loadConfiguration");
+		if (this.config.get("robot.exist").equals("true")) {
+			System.out.println("[TaskCapabilityLoader]robot.exit is true");
+			
+			// load the Robot object to the hashmap
+			this.config.put("robot.object", robot);
+		}
+	}
+
+	/** 
+	 * Create Ctr
+	 * @param task
+	 * @return
+	 */
+	public Constructor createConstructor(Task task) {
+		ConcurrentHashMap<Object, Object> config = task.getConfig();
+		ClassLoader myClassLoader = ClassLoader.getSystemClassLoader();
+		Constructor constructor = null;
+
+
+		String classNameToBeLoaded = config.get("capability.directory") + "." + task.getCapabilityName();
+		try {
+			System.out.println("[TaskCapabilityLoader] Before loadConfiguration... " + task.getCapabilityName());
+			loadConfiguration(config);
+			System.out.println("[TaskCapabilityLoader] After loadConfiguration... " + task.getCapabilityName());
+			Class myClass = myClassLoader.loadClass(classNameToBeLoaded);
+//			if(config.get("robot.exist") != null) {
+//				System.out.println("robot.exist is not null " + config.get("robot.exist"));
+////				if(config.get("robot.exist").equals("true")) {
+//					System.out.println("robot.exist is true " + task.getCapabilityName());
+//					constructor = myClass.getConstructor(Robot.class);
+//				}
+//				else {
+//			System.out.println("robot.exit is NOT TRUE" + task.getCapabilityName());
+//			constructor = myClass.getConstructor();
+//				}
+//			} else {
+			constructor = myClass.getConstructor();
+//			}
+			System.out.println();
+		} catch (Exception e) {
+			e.printStackTrace();
+		} 
+		return constructor;		
+	}
+	
+	public Capability instantiateCapability(Task task) {
+		Constructor constructor = task.getCapabilityConstructor();
+		Capability capability = null;
+		try {
+//			if(config.get("robot.object") != null) {
+//				System.out.println("robot.object is not null");
+//				capability = (Capability)constructor.newInstance((Robot)config.get("robot.object"));
+//				task.setCapbility(capability);
+//			}
+//			else {
+//				System.out.println("robot.object is null");
+			capability = (Capability) constructor.newInstance();
+			task.setCapbility(capability);
+//		}
+		} catch(IllegalAccessException e) {
+			e.printStackTrace();
+		} catch(InstantiationException e) {
+			e.printStackTrace();
+		} catch(InvocationTargetException e) {
+			e.printStackTrace();
+		}
+		return capability;
+	}
+
+
+	/*
+	 * Return Config Hashmap
+	 * 
+	 */
+	public ConcurrentHashMap<Object, Object> getConfig() {
+		return this.config;
+	}
+}

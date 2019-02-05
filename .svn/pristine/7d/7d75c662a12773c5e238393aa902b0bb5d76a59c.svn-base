@@ -1,0 +1,26 @@
+package edu.cmu.gizmo.unittest;
+
+import java.util.concurrent.ConcurrentHashMap;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.util.ManifestReader;
+
+public class TestManifestReader extends TestCase {
+	public void testShouldReadInGizmoConfigFile() {
+		ManifestReader mfReader = new ManifestReader();
+
+		ConcurrentHashMap<Object, Object> hm = mfReader.readConfig();
+		//HashMap<String, String> hm = mfReader.readCapabilityManifest("DummyCapability");
+		//System.out.println(hm.get("capability.directory"));
+		//System.out.println("src/main/java/edu/cmu/gizmo/management/capability");
+
+		System.out.println((String)hm.get("capability.directory"));
+		assertEquals((String)hm.get("capability.directory"), "bin/edu/cmu/gizmo/management/capability");
+	}
+
+	public void testShouldReadInCapabilityMfFile() {
+		ManifestReader mfReader = new ManifestReader();
+
+		ConcurrentHashMap<Object, Object> hm = mfReader.readCapabilityManifest("DummyCapability");
+	}
+}

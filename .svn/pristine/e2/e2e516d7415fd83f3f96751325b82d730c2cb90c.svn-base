@@ -1,0 +1,44 @@
+package edu.cmu.gizmo.management.beans;
+
+import java.io.Serializable;
+
+public class TaskDef implements Serializable {
+	private int taskId;
+	private String taskDesc;
+	private String taskName;
+	private String taskScriptName;
+	private int taskParentId;
+	
+	public int getTaskId() {
+		return taskId;
+	}
+	public void setTaskId(int taskId) {
+		this.taskId = taskId;
+	}
+	public String getTaskDesc() {
+		return taskDesc;
+	}
+	public void setTaskDesc(String taskDesc) {
+		this.taskDesc = taskDesc;
+	}
+	public String getTaskName() {
+		return taskName;
+	}
+	public void setTaskName(String taskName) {
+		this.taskName = taskName;
+	}
+	public String getTaskScriptName() {
+		return taskScriptName;
+	}
+	public void setTaskScriptName(String taskScriptName) {
+		this.taskScriptName = taskScriptName;
+	}
+	public int getTaskParentId() {
+		return taskParentId;
+	}
+	public void setTaskParentId(int taskParentId) {
+		this.taskParentId = taskParentId;
+	}
+	
+
+}

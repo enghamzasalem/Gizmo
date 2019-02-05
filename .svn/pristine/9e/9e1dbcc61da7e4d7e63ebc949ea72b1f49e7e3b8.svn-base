@@ -1,0 +1,339 @@
+package edu.cmu.gizmo.management.taskorchestrator;
+
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
+
+import edu.cmu.gizmo.management.dataaccess.TaskCapabilityDBAccess;
+import edu.cmu.gizmo.management.dataaccess.jdbc.TaskCapabilityDBAccessImpl;
+import edu.cmu.gizmo.management.util.ManifestReader;
+
+/**
+ * CapabilityResourceTable keeps track of the capability to resource
+ * and resource to capability key-value match in hashtables. 
+ * 
+ * keyValueLookup and capabilityLookup would be useful to find out 
+ * which capabilities are sharing the resource. 
+ * 
+ * inputLookup holds <key:capability name>-<value:inputVector>. 
+ * outputLookup holds <key:capability name>-<value:outputVector>.
+ * 
+ * Overview of Data Structure
+ * capabilityLookup - ConcurrentHashMap
+ * ----------------------------
+ * |    KEY     |    VALUE    |
+ * ----------------------------
+ * | capability | "key,value" |
+ * ----------------------------
+ * | capability | "key,value" |
+ * ----------------------------
+ * 
+ * keyValueLookup - ConcurrentHashMap
+ * ----------------------------
+ * |    KEY     |    VALUE    |
+ * ----------------------------
+ * | "key,value" | capability |
+ * ----------------------------
+ * | "key,value" | capability |
+ * ----------------------------
+ * 
+ */
+public class CapabilityResourceTable {
+	/**
+	 * keyValue-capability hashtable
+	 */
+	private Map<String, Vector<String>> keyValueLookup = null;
+	/**
+	 * capability-keyValue hashtable
+	 */
+	private Map<String, Vector<String>> capabilityLookup = null;
+	/**
+	 * capability-input hashtable
+	 */
+	private Map<String, Vector<String>> inputLookup = null;
+	/**
+	 * capability-output hashtable
+	 */
+	private Map<String, Vector<String>> outputLookup = null;
+
+	/**
+	 * A complete list of all of the capabilities in 
+	 * primitive_capability table
+	 */
+	private Vector<String> capabilityList = null;
+	
+	private TaskCapabilityDBAccess dbo = null;
+	private ManifestReader manifestReader = null;
+
+	/**
+	 * Get Method
+	 */
+	public ManifestReader getManifestReader() {
+		return manifestReader;
+	}
+
+	public Map<String, Vector<String>> getInputLookup() {
+		return inputLookup;
+	}
+
+	public Map<String, Vector<String>> getOutputLookup() {
+		return outputLookup;
+	}
+	
+	public Map<String, Vector<String>> getKeyValueLookup() {
+		return keyValueLookup;
+	}
+
+	public Map<String, Vector<String>> getCapabilityLookup() {
+		return capabilityLookup;
+	}
+
+	/**
+	 * Constructor creates all of 
+	 */
+	public CapabilityResourceTable() {
+		dbo = new TaskCapabilityDBAccessImpl();
+		capabilityList = dbo.listPrimitives();
+		keyValueLookup = new ConcurrentHashMap<String, Vector<String>>();
+		capabilityLookup = new ConcurrentHashMap<String, Vector<String>>();
+		inputLookup = new ConcurrentHashMap<String, Vector<String>>();
+		outputLookup = new ConcurrentHashMap<String, Vector<String>>();
+		manifestReader = new ManifestReader();
+	}
+	
+	/**
+	 * 1. Get a capability list from db
+	 * 2. Foreach capability do the following:
+	 * 3. Foreach MF file:
+	 * 4. add capability, "key,value"
+	 * 5. add "key,value", capability
+	 */
+	public void createDataStructure() {
+		for(int i=0; i < capabilityList.size(); ++i) {
+			String capabilityName = (String)capabilityList.get(i);
+			System.out.println("[CapabilityResourceTable] createDataStructure: " + capabilityName);
+			ConcurrentHashMap<Object, Object> capabilityHashMap = 
+					manifestReader.readCapabilityManifest(capabilityName);
+
+			for(Map.Entry<Object, Object> entry: capabilityHashMap.entrySet())
+	        {
+				String key = (String)entry.getKey();
+				String value = (String)capabilityHashMap.get((Object)key);
+				System.out.println("SSSShould be in here...." + key + " " + value);
+				String keyValue = null;
+				if(!key.equals("ui.display") && !key.equals("ui.class") && 
+						!key.equals("capability.directory")) {
+					keyValue = "[" + key + "," + value + "]";
+					Vector<String> temp = new Vector<String>();
+					if(key.equals("output.name")) {
+System.out.println("Ever happens??");					
+						// capability exists
+						if(outputLookup.containsKey(capabilityName)) {
+							temp = outputLookup.get(capabilityName);
+							temp.add(value);
+							outputLookup.put(capabilityName, temp);
+						}
+						// capability does not exist
+						else {
+							temp = new Vector<String>();
+							temp.add(value);
+							outputLookup.put(capabilityName, temp);
+						}					
+					} else if(key.equals("parameter.name")) {
+						
+						// capability exists
+						if(inputLookup.containsKey(capabilityName)) {
+							temp = inputLookup.get(capabilityName);
+							temp.add(value);
+							inputLookup.put(capabilityName, temp);
+						}
+						// capability does not exist
+						else {
+							temp = new Vector<String>();
+							temp.add(value);
+							inputLookup.put(capabilityName, temp);
+						}
+						
+					}
+
+					
+					
+				}
+	        }
+			for(Map.Entry<Object, Object> entry: capabilityHashMap.entrySet())
+	        {
+				String key = (String)entry.getKey();
+				String value = (String)capabilityHashMap.get((Object)key);
+				System.out.println("Should be in here...." + key + " " + value);
+				String keyValue = null;
+				if(!key.equals("ui.display") && !key.equals("ui.class") && 
+						!key.equals("capability.directory") && !key.equals("output.name") &&
+						!key.equals("parameter.name")) {
+					keyValue = "[" + key + "," + value + "]";
+					Vector<String> temp = new Vector<String>();
+				
+					// capability exists
+					if(capabilityLookup.containsKey(capabilityName)) {
+						System.out.println("[CapabilityResrouceTable] capability containsKey capabilityName(" + capabilityName + ")");
+						temp = capabilityLookup.get(capabilityName);
+						temp.add(keyValue);
+						capabilityLookup.put(capabilityName, temp);
+					}
+					// capability does not exist
+					else {
+						temp = new Vector<String>();
+						temp.add(keyValue);
+						capabilityLookup.put(capabilityName, temp);
+					}
+				
+					// keyValue exists
+					if(keyValueLookup.containsKey(keyValue)) {
+						System.out.println("[CapabilityResrouceTable] keyValueLookup containsKey");
+						temp = keyValueLookup.get(keyValue);
+						temp.add(capabilityName);
+						keyValueLookup.put(keyValue, temp);
+					}
+					// keyValue does not exist
+					else {
+						temp = new Vector<String>();
+						temp.add(capabilityName);
+						keyValueLookup.put(keyValue, temp);
+					}
+				}
+			}
+		}
+	}
+	
+	public Vector<String> returnCapabilityInput(String capabilityName) {
+		System.out.println("AAAAAAAA");
+		for(Map.Entry<String, Vector<String>> entry: inputLookup.entrySet()) {
+			System.out.println("returnCapabilityInput");
+			String key = (String)entry.getKey();
+			if(key.toLowerCase().equals(capabilityName.toLowerCase())) {
+				Vector<String> value = (Vector<String>)inputLookup.get((Object)key);
+				return value;	
+			}
+		}
+		return null;
+	}
+
+	public Vector<String> returnCapabilityOutput(String capabilityName) {
+		for(Map.Entry<String, Vector<String>> entry: outputLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			if(key.toLowerCase().equals(capabilityName.toLowerCase())) {
+				Vector<String> value = (Vector<String>)outputLookup.get((Object)key);
+				return value;	
+			}
+		}
+		return null;
+	}
+
+	
+	public int returnNumOfCapabilityForKeyValue(String keyValue) {
+		for(Map.Entry<String, Vector<String>> entry: keyValueLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			if(key.equals(keyValue)) {
+				Vector<String> value = (Vector<String>)keyValueLookup.get((Object)key);
+				return value.size();			
+			}
+		}
+
+		return 0;
+	}
+	
+	public Vector<String> returnListOfCapabilitiesUsingSameResource(String keyValue) {
+		for(Map.Entry<String, Vector<String>> entry: keyValueLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			if(key.toLowerCase().equals(keyValue.toLowerCase())) {
+				Vector<String> value = (Vector<String>)keyValueLookup.get((Object)key);
+				return value;	
+			}
+		}
+		return null;
+	}
+
+	public Vector<String> returnListOfResourcesCapabilityIsUsing(String capabilityName) {
+		System.out.println("[CapabilityResourceTable] returnListOfResourcesCapabilityIsUsing: " + capabilityName);
+		for(Map.Entry<String, Vector<String>> entry: capabilityLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			System.out.println("[CapabilityResourceTable] returnListOfResourcesCapabilityIsUsing: key(" + key + ")");
+			if(key.toLowerCase().equals(capabilityName.toLowerCase())) {
+				Vector<String> value = (Vector<String>)capabilityLookup.get((Object)key);
+				return value;	
+			}
+		}
+		return null;
+	}
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	public Vector<String> printCapabilityLookup() {
+		System.out.println("Capability PrintOut");
+		for(Map.Entry<String, Vector<String>> entry: capabilityLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			System.out.println("key: " + key);
+			Vector<String> value = (Vector<String>)capabilityLookup.get((Object)key);
+			for(int i=0; i < value.size(); ++i) {
+				System.out.println("value" + i + ": " + value.get(i));				
+			}
+		}
+		return null;
+	}
+
+	
+	
+	public Vector<String> printKeyValueLookup() {
+		System.out.println("KeyValue PrintOut");
+		for(Map.Entry<String, Vector<String>> entry: keyValueLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			System.out.println("key: " + key);
+			Vector<String> value = (Vector<String>)keyValueLookup.get((Object)key);
+			for(int i=0; i < value.size(); ++i) {
+				System.out.println("value" + i + ": " + value.get(i));				
+			}
+		}
+		return null;
+	}
+	
+	
+	public Vector<String> printInputLookup() {
+		System.out.println("Input PrintOut");
+		for(Map.Entry<String, Vector<String>> entry: inputLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			System.out.println("key: " + key);
+			Vector<String> value = (Vector<String>)inputLookup.get((Object)key);
+			for(int i=0; i < value.size(); ++i) {
+				System.out.println("value" + i + ": " + value.get(i));				
+			}
+		}
+		return null;
+	}
+	
+	
+	
+	
+	public Vector<String> printOutputLookup() {
+		System.out.println("Output PrintOut");
+		for(Map.Entry<String, Vector<String>> entry: outputLookup.entrySet()) {
+			String key = (String)entry.getKey();
+			System.out.println("key: " + key);
+			Vector<String> value = (Vector<String>)outputLookup.get((Object)key);
+			for(int i=0; i < value.size(); ++i) {
+				System.out.println("value" + i + ": " + value.get(i));				
+			}
+		}
+		return null;
+	}
+
+}

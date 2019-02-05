@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<JobDescription>
+	<Tasks>
+		<GroupedTask>
+			<GroupedTaskID>0</GroupedTaskID>
+			<Task>
+				<TaskID>0</TaskID>
+				<TaskName>DummyPrimitiveCapability</TaskName>
+				<Flag status="0">Fatal</Flag>
+				<Flag status="1">Success</Flag>
+			</Task>
+			<Task>
+				<TaskID>1</TaskID>
+				<TaskName>SecondDummyPrimitiveCapability</TaskName>
+				<DependsOn id="0" status="3"/>
+				<Flag status="0">Fatal</Flag>
+				<Flag status="1">Success</Flag>
+				<DependsOn id="0" status="2"/>
+			</Task>
+		</GroupedTask>
+	</Tasks>
+</JobDescription>

@@ -1,0 +1,64 @@
+package edu.cmu.gizmo.unittest;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.beans.PrimitiveCapability;
+import edu.cmu.gizmo.management.dataaccess.TaskCapabilityDBAccess;
+import edu.cmu.gizmo.management.dataaccess.jdbc.TaskCapabilityDBAccessImpl;
+
+public class TestTaskCapabilityDBAccessImpl extends TestCase {
+	public void testShouldInsertPrimitiveCapability() {
+		PrimitiveCapability pc1 = new PrimitiveCapability("gotoroomcapability", "GoToRoomDriveCapability");
+		PrimitiveCapability pc2 = new PrimitiveCapability("checkavailabilitycapability", "QueryGoogleCalendar");
+		PrimitiveCapability pc3 = new PrimitiveCapability("dummyprimitivecapability", "DummyCapability");
+		PrimitiveCapability pc4 = new PrimitiveCapability("seconddummyprimitivecapability", "SecondDummyCapability");
+
+		TaskCapabilityDBAccess taskCapabilityDBAccess = new TaskCapabilityDBAccessImpl();
+		taskCapabilityDBAccess.insertPrimitiveCapability(pc1);
+		taskCapabilityDBAccess.insertPrimitiveCapability(pc2);
+		taskCapabilityDBAccess.insertPrimitiveCapability(pc3);
+		taskCapabilityDBAccess.insertPrimitiveCapability(pc4);
+
+		taskCapabilityDBAccess.close();
+	}
+
+	public void testShouldRetrieveGoToRoomCapability() {
+		PrimitiveCapability pc1 = new PrimitiveCapability("gotoroomcapability", "GoToRoomDriveCapability");
+		
+		TaskCapabilityDBAccess taskCapabilityDBAccess = new TaskCapabilityDBAccessImpl();
+		String capability = taskCapabilityDBAccess.retrieveCapability("gotoroomcapability");
+		assertEquals(capability, "GoToRoomDriveCapability");
+
+		taskCapabilityDBAccess.close();
+	}	
+
+	public void testShouldRetrieveCheckAvailabilityCapability() {
+		PrimitiveCapability pc1 = new PrimitiveCapability("checkavailabilitycapability", "QueryGoogleCalendar");
+		
+		TaskCapabilityDBAccess taskCapabilityDBAccess = new TaskCapabilityDBAccessImpl();
+		String capability = taskCapabilityDBAccess.retrieveCapability("checkavailabilitycapability");
+		assertEquals(capability, "QueryGoogleCalendar");
+
+		taskCapabilityDBAccess.close();
+	}	
+
+	public void testShouldRetrieveDummyPrimitiveCapability() {
+		PrimitiveCapability pc1 = new PrimitiveCapability("dummyprimitivecapability", "DummyCapability");
+		
+		TaskCapabilityDBAccess taskCapabilityDBAccess = new TaskCapabilityDBAccessImpl();
+		String capability = taskCapabilityDBAccess.retrieveCapability("dummyprimitivecapability");
+		assertEquals(capability, "DummyCapability");
+
+		taskCapabilityDBAccess.close();
+	}	
+
+	public void testShouldRetrieveSecondDummyPrimitiveCapability() {
+		PrimitiveCapability pc1 = new PrimitiveCapability("seconddummyprimitivecapability", "SecondDummyCapability");
+		
+		TaskCapabilityDBAccess taskCapabilityDBAccess = new TaskCapabilityDBAccessImpl();
+		String capability = taskCapabilityDBAccess.retrieveCapability("seconddummyprimitivecapability");
+		assertEquals(capability, "SecondDummyCapability");
+
+		taskCapabilityDBAccess.close();
+	}	
+
+}

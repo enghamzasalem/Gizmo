@@ -1,0 +1,36 @@
+package edu.cmu.gizmo.management.taskorchestrator.formbeans;
+
+import java.util.Vector;
+
+public class OrchestrationStep {
+
+	private Vector<Primitive> primitivesList;
+	private Vector<Primitive> primitiveDependenciesList;
+	private OrchestrationStatus saveStatus;
+	
+	public enum OrchestrationStatus {
+		SUCCESS, FAILURE
+	}
+	public Vector<Primitive> getPrimitivesList() {
+		return primitivesList;
+	}
+	public void setPrimitivesList(Vector<Primitive> primitivesList) {
+		this.primitivesList = primitivesList;
+	}
+	public Vector<Primitive> getPrimitiveDependenciesList() {
+		return primitiveDependenciesList;
+	}
+	public void setPrimitiveDependenciesList(
+			Vector<Primitive> primitiveDependenciesList) {
+		this.primitiveDependenciesList = primitiveDependenciesList;
+	}
+	public OrchestrationStatus getSaveStatus() {
+		return saveStatus;
+	}
+	public void setSaveStatus(OrchestrationStatus saveStatus) {
+		this.saveStatus = saveStatus;
+	}
+	
+	
+	
+}

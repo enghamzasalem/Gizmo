@@ -1,0 +1,1038 @@
+/*
+ * ScriptTaskStrategy.java 1.0 12\06\19
+ */
+package edu.cmu.gizmo.management.taskmanager;
+
+import java.io.File;
+import java.lang.reflect.Constructor;
+import java.util.ArrayList;
+import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXParseException;
+
+import edu.cmu.gizmo.management.capability.Capability;
+import edu.cmu.gizmo.management.capability.Capability.CapabilityStatus;
+import edu.cmu.gizmo.management.robot.Robot;
+import edu.cmu.gizmo.management.taskbus.GizmoTaskBus;
+import edu.cmu.gizmo.management.taskmanager.exceptions.CapabilityNotFoundForPrimitive;
+import edu.cmu.gizmo.management.taskmanager.exceptions.TaskPlanNotFoundException;
+import edu.cmu.gizmo.management.taskmanager.scripttask.DependsOn;
+import edu.cmu.gizmo.management.taskmanager.scripttask.Flag;
+import edu.cmu.gizmo.management.taskmanager.scripttask.GroupedTask;
+import edu.cmu.gizmo.management.taskmanager.scripttask.GroupedTaskDependsOn;
+import edu.cmu.gizmo.management.taskmanager.scripttask.GroupedTaskStatus;
+import edu.cmu.gizmo.management.taskmanager.scripttask.Output;
+import edu.cmu.gizmo.management.taskmanager.scripttask.Parameter;
+import edu.cmu.gizmo.management.taskmanager.scripttask.PlannedTaskStatus;
+import edu.cmu.gizmo.management.taskmanager.scripttask.PlannedTasks;
+import edu.cmu.gizmo.management.taskmanager.scripttask.Task;
+import edu.cmu.gizmo.management.util.ManifestReader;
+
+public class ScriptTaskStrategy extends TaskExecutionStrategy {
+	/** the ID for the current task as assigned by the Task Manager */
+	private Integer taskId = null;
+
+	/** the name of the task script */
+	private String taskPlan = null;
+
+	/** the parsed task object */
+	private PlannedTasks tasks = null;
+
+	/** indicates whether a task is valid */
+	private boolean taskVerified = false;
+
+	/** indicates whether a task should be stopped */
+	private boolean stopRunning = false;
+
+	/** current status of the task */
+	private TaskStatus update = null;
+
+	/** locates specific capability to execute */
+	private TaskResolver tr = null;
+
+	/** loads specific capability to execute */
+	private TaskCapabilityLoader tcl = null;
+
+	/** manifest reader used by loaded capabilities */
+	private ManifestReader mreader = null;
+
+	/** id of the current grouped task */
+	private int currentGroupedTaskId = -1;
+
+	/** id of the current task */
+	private int currentTaskId = -1;
+
+	/** the current task */
+	private Task currentTask = null;
+
+	/** the current grouped task */
+	private GroupedTask currentGroupedTask = null;
+
+	/** the list of capabilities currently running */
+	private Vector<Capability> runningCapabilities;
+	
+	/**
+	 * Fetch the object that represents the currently loaded task.
+	 * 
+	 * @return the <code>PlannedTasks</code> for the current task.
+	 * 
+	 * @see edu.cmu.gizmo.management.taskmanager.scripttask.PlannedTasks
+	 * 
+	 */
+	public PlannedTasks getTasks() {
+		return tasks;
+	}
+
+	/**
+	 * Create a new ScritpTaskStragey object.
+	 * 
+	 * @param cobot
+	 *            the reference to the robot
+	 * 
+	 * @param taskId
+	 *            the task identifier assigned by the Task Manager when the new
+	 *            task execution strategy is started.
+	 * 
+	 * @param taskPlan
+	 * @throws TaskPlanNotFoundException
+	 */
+	public ScriptTaskStrategy(Robot cobot,
+			Integer taskId, String taskPlan) throws TaskPlanNotFoundException{
+		
+		this.taskId = taskId;
+		this.taskPlan = taskPlan;
+		this.tr = new TaskResolver();
+		this.tcl = new TaskCapabilityLoader(cobot);
+		this.mreader = new ManifestReader();
+		runningCapabilities = new Vector<Capability>();
+	}
+
+	/**
+	 * This method reads in a task script and loads the capabilities to execute
+	 * in the order/sequence. It follows DOM parser reader and reads XML from
+	 * root down to the leaves.
+	 * 
+	 * @return true is the script was parsed successfully, false otherwise.
+	 */
+	public boolean parse() {
+		try {
+			File file = new File(taskPlan);
+			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+			DocumentBuilder db = dbf.newDocumentBuilder();
+			Document doc = db.parse(file);
+			doc.getDocumentElement().normalize();
+			System.out.println("[ScriptTaskStrategy] load(): Root element "
+					+ doc.getDocumentElement().getNodeName());
+
+			ArrayList<TaskInputMap> totalTaskInputMapArrayList = 
+					new ArrayList<TaskInputMap>(0);
+
+			// -------
+			// TASKS
+			// -------
+			NodeList tasksNodeList = doc.getElementsByTagName("Tasks");
+			//Capability whatInstance = null;
+			tasks = new PlannedTasks();
+			for (int taskCounter = 0; taskCounter < tasksNodeList.getLength(); taskCounter++) {
+				Node tasksNode = tasksNodeList.item(taskCounter);
+				if (tasksNode.getNodeType() == Node.ELEMENT_NODE) {
+					Element taskElement = (Element) tasksNode;
+
+					// ------------
+					// GROUPEDTASK
+					// ------------
+					NodeList groupedTaskNodeList = taskElement
+							.getElementsByTagName("GroupedTask");
+					for (int groupedTaskCounter = 0; groupedTaskCounter < groupedTaskNodeList
+							.getLength(); ++groupedTaskCounter) {
+						GroupedTask groupedTaskObj = new GroupedTask();
+						ArrayList<GroupedTask> groupedTaskListObj =
+								tasks.getGroupedTask();
+						groupedTaskListObj.add(groupedTaskObj);
+						Node groupedTaskNodeListNode = groupedTaskNodeList
+								.item(groupedTaskCounter);
+						if (groupedTaskNodeListNode.getNodeType() == Node.ELEMENT_NODE) {
+							Element groupedTaskNodeListElement = (Element) groupedTaskNodeListNode;
+
+							// ------------------
+							// GROUPEDTASKSTATUS
+							// ------------------
+							GroupedTaskStatus groupedTaskStatus
+							= new GroupedTaskStatus();
+							groupedTaskObj
+									.setGroupedTaskStatus(groupedTaskStatus);
+
+							// ----------------------
+							// GROUPEDTASKDEPENDSON
+							// ----------------------
+							NodeList groupedTaskDependsOnNodeList = groupedTaskNodeListElement
+									.getElementsByTagName("GroupedTaskDependsOn");
+							for (int groupedTaskDependsOnNodeListCounter = 0; groupedTaskDependsOnNodeListCounter < groupedTaskDependsOnNodeList
+									.getLength(); ++groupedTaskDependsOnNodeListCounter) {
+								Element groupedTaskDependsOnElement = (Element) groupedTaskDependsOnNodeList
+										.item(groupedTaskDependsOnNodeListCounter);
+								NodeList groupedTaskDependsOnList = groupedTaskDependsOnElement
+										.getChildNodes();
+								System.out
+										.println("[ScriptTaskStrategy] load(): GroupedTaskDependsOn ID: "
+												+ groupedTaskDependsOnElement
+														.getAttribute("id")
+												+ "\tStatus: "
+												+ groupedTaskDependsOnElement
+														.getAttribute("status"));
+								GroupedTaskDependsOn groupedTaskDependsOnObj = new GroupedTaskDependsOn();
+								groupedTaskObj
+										.setGroupedTaskDependsOn(groupedTaskDependsOnObj);
+							}
+
+							// --------------
+							// GroupedTaskID
+							// --------------
+							NodeList groupedTaskIdList = groupedTaskNodeListElement
+									.getElementsByTagName("GroupedTaskID");
+							for (int groupedTaskIdListCounter = 0; groupedTaskIdListCounter < groupedTaskIdList
+									.getLength(); ++groupedTaskIdListCounter) {
+								Element groupedTaskIdElement = (Element) groupedTaskIdList
+										.item(groupedTaskIdListCounter);
+								NodeList groupedTaskIdNodeList = groupedTaskIdElement
+										.getChildNodes();
+								System.out
+										.println("[ScriptTaskStrategy] load(): GroupedTaskID : "
+												+ ((Node) groupedTaskIdNodeList
+														.item(groupedTaskIdListCounter))
+														.getNodeValue());
+																
+								if(((Node) groupedTaskIdNodeList
+										.item(groupedTaskIdListCounter))
+										.getNodeValue() == null) {
+									update = new TaskStatus(taskId,
+									TaskStatus.TaskStatusValue.ERROR, "ERROR");
+									setChanged();
+									notifyObservers(update);
+								}
+
+								int groupedTaskIdInt = new Integer(
+										((Node) groupedTaskIdNodeList
+												.item(groupedTaskIdListCounter))
+												.getNodeValue()).intValue();
+								groupedTaskObj
+										.setGroupedTaskId(groupedTaskIdInt);
+							}
+
+							// --------------
+							// Task
+							// --------------
+							NodeList groupedTaskList = groupedTaskNodeListElement
+									.getElementsByTagName("Task");
+							ArrayList<Task> arrayListTaskObj = groupedTaskObj
+									.getTasks();
+							for (int groupedTaskListCounter = 0; 
+									groupedTaskListCounter < groupedTaskList
+									.getLength(); ++groupedTaskListCounter) {
+								Task taskObj = new Task();
+								arrayListTaskObj.add(taskObj);
+								Element groupedTaskElement = 
+										(Element) groupedTaskList
+										.item(groupedTaskListCounter);
+
+								PlannedTaskStatus taskStatus = new PlannedTaskStatus();
+								taskObj.setTaskStatus(taskStatus);
+
+								// --------------
+								// DependsOn
+								// --------------
+								NodeList dependsOnNodeList = groupedTaskElement
+										.getElementsByTagName("DependsOn");
+								for (int dependsOnNodeListCounter = 0; dependsOnNodeListCounter < dependsOnNodeList
+										.getLength(); ++dependsOnNodeListCounter) {
+									Element dependsOnElement = (Element) dependsOnNodeList
+											.item(dependsOnNodeListCounter);
+									NodeList dependsOnList = dependsOnElement
+											.getChildNodes();
+									System.out
+											.println(
+													"[ScriptTaskStrategy] load(): DependsOn : "
+													+ "\tStatus: "
+													+ dependsOnElement
+															.getAttribute("status")
+													+ "\tId: "
+													+ dependsOnElement
+															.getAttribute("id"));
+									DependsOn dependsOn = new DependsOn();
+									dependsOn
+											.setId(new Integer(dependsOnElement
+													.getAttribute("id"))
+													.intValue());
+									dependsOn
+											.setStatus(new Integer(
+													dependsOnElement
+															.getAttribute("id"))
+													.intValue());
+									taskObj.setDependsOn(dependsOn);
+								}
+
+								// --------------
+								// TaskID
+								// --------------
+								NodeList taskIdNodeList = groupedTaskElement
+										.getElementsByTagName("TaskID");
+								Element taskIdElement = (Element) taskIdNodeList
+										.item(0);
+								
+								NodeList taskIdList = null;
+								int taskIdInt = -1;
+								if(taskIdElement == null) {
+
+
+									update = new TaskStatus(taskId,
+									TaskStatus.TaskStatusValue.ERROR, "ERROR");
+									setChanged();
+									notifyObservers(update);
+								} else {
+									taskIdList = taskIdElement.getChildNodes();
+									System.out
+									.println("[ScriptTaskStrategy] load(): TaskID : "
+												+ ((Node) taskIdList.item(0))
+														.getNodeValue());
+
+									taskIdInt = new Integer(
+										((Node) taskIdList.item(0))
+												.getNodeValue()).intValue();
+									taskObj.setTaskId(taskIdInt);
+								}
+								// --------------
+								// TaskName
+								// --------------
+								NodeList taskNameNodeList = groupedTaskElement
+										.getElementsByTagName("TaskName");
+								Element taskNameElement = (Element) taskNameNodeList
+										.item(0);								
+								if(taskNameElement == null) {
+									update = new TaskStatus(taskId,
+									TaskStatus.TaskStatusValue.ERROR, "ERROR");
+									setChanged();
+									notifyObservers(update);
+								}
+								else {
+								
+									NodeList taskNameList = taskNameElement
+											.getChildNodes();
+									System.out
+										.println("[ScriptTaskStrategy] load(): Task Name : "
+												+ ((Node) taskNameList.item(0))
+														.getNodeValue());
+									taskObj.setTaskName(((Node) taskNameList
+										.item(0)).getNodeValue());
+								}
+
+								// --------------
+								// Output
+								// --------------
+								NodeList outputNodeList = groupedTaskElement
+										.getElementsByTagName("Output");
+								ArrayList<Output> arrayOutput = taskObj.getOutputArrayList();
+								for (int outputNodeListCounter = 0; outputNodeListCounter < outputNodeList
+										.getLength(); ++outputNodeListCounter) {
+									// Node paramElement = (Element)
+									// paramNodeList.item(0);
+									Output output = new Output();
+
+									Element outputNodeListElement = (Element) outputNodeList
+											.item(outputNodeListCounter);
+									NodeList outputNameNodeList = outputNodeListElement
+											.getElementsByTagName("OutputName");
+									Element outputNameElement = (Element) outputNameNodeList
+											.item(0);
+									NodeList outputNameList = outputNameElement
+											.getChildNodes();
+									System.out
+											.println("[ScriptTaskStrategy] load(): OutputName: "
+													+ ((Node) outputNameList
+															.item(0))
+															.getNodeValue());
+
+									output.setName(((Node) outputNameList
+											.item(0))
+											.getNodeValue());
+									
+									arrayOutput.add(output);
+									taskObj.setOutputArrayList(arrayOutput);
+								}
+
+								// --------------
+								// Parameter
+								// --------------
+								NodeList paramNodeList = groupedTaskElement
+										.getElementsByTagName("Parameter");
+								ArrayList<Parameter> arrayParameter = taskObj.getParameterArrayList();
+								for (int paramNodeListCounter = 0; paramNodeListCounter < paramNodeList
+										.getLength(); ++paramNodeListCounter) {
+									// Node paramElement = (Element)
+									// paramNodeList.item(0);
+									Parameter parameter = new Parameter();
+
+									Element paramNodeListElement = (Element) paramNodeList
+											.item(paramNodeListCounter);
+									NodeList paramNameNodeList = paramNodeListElement
+											.getElementsByTagName("ParameterName");
+									Element paraNameElement = (Element) paramNameNodeList
+											.item(0);
+									NodeList paramNameList = paraNameElement
+											.getChildNodes();
+									System.out
+											.println("[ScriptTaskStrategy] load(): ParameterName: "
+													+ ((Node) paramNameList
+															.item(0))
+															.getNodeValue());
+
+									parameter.setName(((Node) paramNameList
+											.item(0))
+											.getNodeValue());
+									
+									arrayParameter.add(parameter);
+									taskObj.setParameterArrayList(arrayParameter);
+								}
+
+								// --------------
+								// Flag
+								// --------------
+								NodeList flagNodeList = groupedTaskElement
+										.getElementsByTagName("Flag");
+								ArrayList<Flag> flagArrayList = taskObj
+										.getFlagArrayList();
+								for (int flagNodeListCounter = 0; flagNodeListCounter < flagNodeList
+										.getLength(); ++flagNodeListCounter) {
+									Element flagElement = (Element) flagNodeList
+											.item(flagNodeListCounter);
+									NodeList flagList = flagElement
+											.getChildNodes();
+									System.out
+											.println("[ScriptTaskStrategy] load(): Flag : "
+													+ ((Node) flagList.item(0))
+															.getNodeValue()
+													+ "\tStatus: "
+													+ flagElement
+															.getAttribute("status"));
+									Flag flag = new Flag();
+
+									if(((Node) flagList.item(0))
+											.getNodeValue() == null) {
+										update = new TaskStatus(taskId,
+										TaskStatus.TaskStatusValue.ERROR, "ERROR");
+										setChanged();
+										notifyObservers(update);
+									} else {
+										flag.setMsg(((Node) flagList.item(0))
+											.getNodeValue());
+										flag.setStatus(new Integer(flagElement
+											.getAttribute("status")).intValue());
+									
+										flagArrayList.add(flag);
+										taskObj.setFlagArrayList(flagArrayList);
+									}
+								}
+								
+								// --------------
+								// TaskInputMap
+								// --------------
+								NodeList taskInputMapNodeList = groupedTaskElement
+										.getElementsByTagName("TaskInputMap");
+								ArrayList<TaskInputMap> taskInputMapArrayList = taskObj.getTaskInputMapArrayList();
+								for (int taskInputMapNodeListCounter = 0; taskInputMapNodeListCounter < taskInputMapNodeList
+										.getLength(); ++taskInputMapNodeListCounter) {
+									TaskInputMap taskInputMap = new TaskInputMap();
+
+									Element taskInputMapElement = (Element) taskInputMapNodeList
+											.item(taskInputMapNodeListCounter);
+									
+									// SrcOutputName
+									NodeList taskInputMapList = taskInputMapElement.getElementsByTagName("SrcOutputName");
+
+									Element taskInputMapObjElement = (Element)taskInputMapList.item(0);
+									NodeList taskInputMapObjList = taskInputMapObjElement.getChildNodes();
+									String outputFrom = ((Node) taskInputMapObjList.item(0))
+											.getNodeValue();
+									System.out
+											.println("[ScriptTaskStrategy] load(): TaskInputMap-SrcOutputName : "
+													+ outputFrom);
+
+									// DstParameterName
+									taskInputMapList = taskInputMapElement.getElementsByTagName("DstParameterName");
+
+									taskInputMapObjElement = (Element)taskInputMapList.item(0);
+									taskInputMapObjList = taskInputMapObjElement.getChildNodes();
+									String inputTo = ((Node) taskInputMapObjList.item(0))
+											.getNodeValue();
+									System.out
+											.println("[ScriptTaskStrategy] load(): TaskInputMap-DstParameterName : "
+													+ inputTo);
+									
+									// Add SrcOutputName & DstParameterName
+									taskInputMap.addRoute(outputFrom, inputTo);
+									
+									// SrcId + DstId
+									taskInputMapList = taskInputMapElement.getElementsByTagName("InputCapabilityId");
+
+									taskInputMapObjElement = (Element)taskInputMapList.item(0);
+									taskInputMapObjList = taskInputMapObjElement.getChildNodes();
+									
+									System.out
+											.println("[ScriptTaskStrategy] load(): TaskInputMap-InputCapabilityId : "
+													+ ((Node) taskInputMapObjList.item(0))
+															.getNodeValue());
+
+									taskInputMap.setFromCapabilityId(new Integer(new Integer(((Node) taskInputMapObjList.item(0))
+										.getNodeValue()).intValue() + taskIdInt));
+
+									// Add SrdId + DstId
+									taskInputMap.setToCapabilityId(new Integer(taskIdInt + taskId.intValue()));
+
+									taskInputMapArrayList.add(taskInputMap);
+									taskObj.setTaskInputMapArrayList(taskInputMapArrayList);
+									totalTaskInputMapArrayList.addAll(taskInputMapArrayList);
+								}
+								
+								
+								
+							} // Task for loop
+						} // if (groupedTaskNodeListNode.getNodeType() ==
+							// Node.ELEMENT_NODE)
+					} // GroupedTask for loop
+				}
+			}
+			System.out
+				.println(
+				"[ScriptTaskStrategy] load(): Completed Creating Objects...");
+
+			if(update == null) {
+				Vector<TaskInputMap> v = new Vector<TaskInputMap>(0);
+
+				for(int j=0;  j < totalTaskInputMapArrayList.size(); ++j) {
+					TaskInputMap tim = totalTaskInputMapArrayList.get(j);
+					v.add(tim);
+				}
+								
+				update = new TaskStatus(taskId,
+						TaskStatus.TaskStatusValue.READY, v);
+				setChanged();
+				notifyObservers(update);
+			}
+		} catch (SecurityException e) {
+			e.printStackTrace();
+			update = new TaskStatus(taskId,
+					TaskStatus.TaskStatusValue.ERROR, "ERROR " + e.getMessage());
+			setChanged();
+			notifyObservers(update);
+		} catch (SAXParseException e) {
+			e.printStackTrace();
+			update = new TaskStatus(taskId,
+					TaskStatus.TaskStatusValue.ERROR, "ERROR " + e.getMessage());
+			setChanged();
+			notifyObservers(update);
+		} catch (Exception e) {
+			e.printStackTrace();
+			update = new TaskStatus(taskId,
+					TaskStatus.TaskStatusValue.ERROR, "ERROR " + e.getMessage());
+			setChanged();
+			notifyObservers(update);
+		}
+		
+		return false;
+	}
+
+	/**
+	 * Function to check whether all of the capability classes are present.
+	 * If so, it will create capability constructor for each task object.
+	 * The capability objects will be instantiated by TaskLoader
+	 */
+	public void resolve() {
+		if(tasks != null) {
+			ArrayList<GroupedTask> tmpArrGroupedTask = tasks.getGroupedTask();
+			for(int i=0; i < tmpArrGroupedTask.size(); ++i) {
+				GroupedTask tmpGroupedTask = tmpArrGroupedTask.get(i);
+				ArrayList<Task> tmpArrTask = tmpGroupedTask.getTasks();
+				for(int j=0; j < tmpArrTask.size(); ++j) {
+					Task tmpTask = tmpArrTask.get(j);
+					
+
+					try {
+						
+						System.out.println("[ScriptTaskStrategy] resolve(): " + 
+								tr.retrieveCapablityName(tmpTask.getTaskName()));
+
+						
+						tmpTask.setCapabilityName(tr.retrieveCapablityName(tmpTask.getTaskName()));
+					} catch (CapabilityNotFoundForPrimitive e) {
+						e.printStackTrace();
+						taskVerified = false;
+					}
+				}
+			}
+		}
+		taskVerified = true;		
+	}
+	
+	/**
+	 * This method loads the configuration needed by each capability that is
+	 * part of a task. This method uses the <code>ManifestReader</code> to load
+	 * capability manifest files from the capability installation directory.
+	 * 
+	 * @see ManifestReader
+	 * 
+	 */
+	public void configure() {
+		if(taskVerified) {
+			ArrayList<GroupedTask> tmpArrGroupedTask = tasks.getGroupedTask();
+			for(int i=0; i < tmpArrGroupedTask.size(); ++i) {
+				GroupedTask tmpGroupedTask = tmpArrGroupedTask.get(i);
+				ArrayList<Task> tmpArrTask = tmpGroupedTask.getTasks();
+				for(int j=0; j < tmpArrTask.size(); ++j) {
+					Task tmpTask = tmpArrTask.get(j);
+					// Read in Capability Config
+					System.out.println("tmpTask.getCapabilityName(): " + tmpTask.getCapabilityName());
+					ConcurrentHashMap<Object, Object> config = mreader.readCapabilityManifest(tmpTask.getCapabilityName());
+					tmpTask.setConfig(config);
+				}
+			}
+		}
+		
+	}
+
+	/**
+	 * Create the constructors for the capabilities that are part of the current
+	 * task.
+	 */
+	public void createContructor() {
+		if(taskVerified) {
+			ArrayList<GroupedTask> tmpArrGroupedTask = tasks.getGroupedTask();
+			for(int i=0; i < tmpArrGroupedTask.size(); ++i) {
+				GroupedTask tmpGroupedTask = tmpArrGroupedTask.get(i);
+				ArrayList<Task> tmpArrTask = tmpGroupedTask.getTasks();
+				for(int j=0; j < tmpArrTask.size(); ++j) {
+					Task tmpTask = tmpArrTask.get(j);
+					
+
+					System.out.println("Before createConstructor(): " + j + " " + tmpTask.getCapabilityName().getClass().getName());
+					tmpTask.setCapabilityConstructor(tcl.createConstructor(tmpTask));
+					System.out.println("After createConstructor(): " + j + " " + tmpTask.getCapabilityName().getClass().getName());
+					
+				}
+			}
+		}
+	}
+
+	/**
+	 * Instantiate the capabilities ready for execution.
+	 * 
+	 * @param task
+	 *            the current task
+	 * 
+	 * @see TaskCapabilityLoader
+	 */
+	public void instantiateCapability(Task task) {
+		tcl.instantiateCapability(task);
+	}	
+	
+	/**
+	 * Monitor the capability lifecyle as required by the strategy. This method
+	 * is responsible for ensuring that capability status is relayed to the Task
+	 * Manager. Capability status updates are sent through the
+	 * <code>Observable</code> API.
+	 * 
+	 * @param capability
+	 *            the <code>Capability</code> to monitor.
+	 * 
+	 * @see Observable
+	 * @see TaskManager
+	 * 
+	 */
+	public void monitor(Capability capability) {
+		System.out.println("[ScriptTaskStrategy] monitor() ");
+		System.out.println("[ScriptTaskStrategy] monitor(): Status Name:" + capability.getStatus().name());
+		try{
+			  Thread.currentThread().sleep(10000); //sleep for 10s
+		} catch(Exception ie){
+			ie.printStackTrace();
+		}
+
+		while((capability.getStatus() == Capability.CapabilityStatus.RUNNING ||
+				capability.getStatus() == Capability.CapabilityStatus.LOADED) && !stopRunning) {
+			if(capability.getStatus() == Capability.CapabilityStatus.RUNNING)
+				System.out.println("[ScriptTaskStrategy] monitor(): " + capability.getClass().getName() + 
+					" is still running...");
+			if(capability.getStatus() == Capability.CapabilityStatus.LOADED)
+				System.out.println("[ScriptTaskStrategy] monitor(): " + capability.getClass().getName() + 
+						" is still loaded...");
+				
+			try{
+				  Thread.currentThread().sleep(2000); //sleep for 2s
+			} catch(Exception ie){
+				ie.printStackTrace();
+			}
+		}
+		
+		if(capability.getStatus() == Capability.CapabilityStatus.CANCELED) {
+			System.out.println("[ScriptTaskStrategy] " 
+					+ capability.getClass().getName() + " is cancelled...");
+			capability.unload(); // release the resource		
+			
+			update = new TaskStatus(taskId,
+			TaskStatus.TaskStatusValue.CANCELED, "CANCELED");
+			setChanged();
+			notifyObservers(update);
+		} else if(capability.getStatus() == Capability.CapabilityStatus.ERROR) {
+			System.out.println("[ScriptTaskStrategy] " 
+					+ capability.getCapabilityName() + " is in error... \""
+					+ capability.getStatusMessage() +"\"");
+			capability.unload(); // release the resource		
+			update = new TaskStatus(taskId,
+			TaskStatus.TaskStatusValue.ERROR, "ERROR");
+			setChanged();
+			notifyObservers(update);
+		} 
+		else if(capability.getStatus() == Capability.CapabilityStatus.PAUSED) {
+			System.out.println("[ScriptTaskStrategy] " 
+					+ capability.getClass().getName() + " is paused...");
+			capability.unload(); // release the resource		
+			update = new TaskStatus(taskId,
+			TaskStatus.TaskStatusValue.PAUSED, "PAUSED");
+			setChanged();
+			notifyObservers(update);
+		} 
+		else if(capability.getStatus() == Capability.CapabilityStatus.COMPLETE) {
+			System.out.println("[ScriptTaskStrategy] " 
+					+ capability.getClass().getName() + " is complete...");
+			capability.unload(); // release the resource		
+			update = new TaskStatus(taskId,
+			TaskStatus.TaskStatusValue.COMPLETE, "COMPLETE");
+			setChanged();
+			notifyObservers(update);
+		} 
+		else if(capability.getStatus() == Capability.CapabilityStatus.LOADED) {
+			System.out.println("[ScriptTaskStrategy] " 
+					+ capability.getClass().getName() + " is loaded...");
+			capability.unload(); // release the resource		
+			update = new TaskStatus(taskId,
+			TaskStatus.TaskStatusValue.COMPLETE, "COMPLETE");
+			setChanged();
+			notifyObservers(update);
+		}
+		
+	}
+
+	/**
+	 * Load a new task. Loading fetches the current capability that is part of
+	 * the <code>task</code> and calls it's load() method to set it to the
+	 * LOADED state.
+	 * 
+	 * @param task
+	 *            the capability to load.
+	 * 
+	 * @see Capability
+	 */
+	public void load(Task task) {
+		if(tasks == null) {
+			System.out.println("[ScriptTaskStrategy]: tasks is null");
+		} else {
+			Capability newCapability = task.getCapbility();
+			Constructor c = null;
+			try {
+				System.out.println("[ScriptTaskStrategy] task.getTaskName(): " 
+						+ task.getTaskName());
+				
+				
+				/*
+				 * robot 
+				 */
+								
+				newCapability.load(taskId, taskId + task.getTaskId(), task.getConfig());
+				//newCapability.load(bus, taskId, taskId + task.getTaskId());
+				System.out.println("[ScriptTaskStrategy] capability loaded...");
+			} catch (IllegalArgumentException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				update = new TaskStatus(taskId,
+						TaskStatus.TaskStatusValue.ERROR, "[STS]: ERROR: Capability not found");
+				setChanged();
+				notifyObservers(update);
+			}
+		}		
+	}
+
+	/**
+	 * Execute the capabilities listed in the script.
+	 * Script defines the sequence
+	 */
+	public void execute() {
+		System.out.println(
+				"[ScriptTaskStrategy] Executing ScriptTaskStrategy: parse() starts...");
+		parse();
+
+		System.out.println(
+				"[ScriptTaskStrategy] Executing ScriptTaskStrategy: resolve() starts...");
+		resolve();
+
+		System.out.println(
+				"[ScriptTaskStrategy] Executing ScriptTaskStrategy: configure() starts...");
+
+		configure();
+
+		System.out.println(
+				"[ScriptTaskStrategy] Executing ScriptTaskStrategy: createConstructor() starts...");
+		
+		createContructor();
+
+		System.out.println(
+				"[ScriptTaskStrategy] Executing ScriptTaskStrategy: Loop starts...");
+
+		// Check whether there are any tasks to run
+		// If load() does not complete successfully, it will not enter the if stmt
+		System.out.println("Executing ScriptTaskStrategy: (tasks)" + tasks);
+		if (tasks != null && taskVerified) {
+			// Check whether it is the first capability or not
+			// If it is not the first capability, then resume()
+			// should be called.
+			if (currentGroupedTaskId == -1 && currentTaskId == -1
+					&& currentTask == null && currentGroupedTask == null) {
+				// Loop through the Tasks Datastructure
+				// Tasks --> GroupedTask1 --> Task1 --> Capability
+				//                                  --> TaskName
+				//                                  --> TaskID etc
+				//                        --> Task2 --> etc
+				//       --> GroupedTask2 --> etc
+				//       --> etc
+				ArrayList<GroupedTask> arrGroupedTask = tasks.getGroupedTask();
+				for (int i = 0; i < arrGroupedTask.size() && !stopRunning ; ++i) {
+					GroupedTask groupedTask = arrGroupedTask.get(i);
+					currentGroupedTask = groupedTask;
+					currentGroupedTaskId = i;
+					
+					GroupedTaskStatus groupedTaskStatus = groupedTask
+							.getGroupedTaskStatus();
+					if (groupedTaskStatus.getRetVal() == -1) {
+						ArrayList<Task> arrTask = groupedTask.getTasks();
+						for (int j = 0; j < arrTask.size() && !stopRunning ; ++j) 
+						{
+							Task task = arrTask.get(j);
+							currentTaskId = j;
+							currentTask = task;
+							String taskName = task.getTaskName();
+
+							Capability c = task.getCapbility();
+							
+							if(c == null) {
+
+								System.out.println(
+										"[ScriptTaskStrategy] execute(): Task Name: "
+										+ task.getTaskName());
+								if(task.getDependsOn() != null) {
+									System.out.println("[ScriptTaskStrategy] execute(): dependsOn");
+									int dependsOnId = task.getDependsOn().
+											getId();
+									Task dependentTask = 
+											arrTask.get(dependsOnId);
+									Capability dependentCapability = 
+											dependentTask.getCapbility();
+									while(!stopRunning && (dependentCapability.getStatus() ==
+											Capability.CapabilityStatus.RUNNING || 
+											dependentCapability.getStatus() ==
+											Capability.CapabilityStatus.LOADED)) {
+										System.out.println("[ScriptTaskStrategy] execute(): dependentTask is still running ...");
+										try {
+											Thread.currentThread().sleep(1000);
+											//sleep for 1 s
+										}
+										catch(Exception e){
+											e.printStackTrace();
+										}
+									}
+									
+									System.out.println("[ScriptTaskStrategy] execute(): dependentTask is?? " + 
+									dependentCapability.getCapabilityName() + " " + dependentCapability.getStatus());
+									dependentCapability.unload(); // release the resource
+								}
+						
+								System.out.println("[ScriptTaskStrategy] instantiateCapability starts...");
+								
+								
+								
+								
+								
+								
+								printTask();
+								instantiateCapability(task);
+								System.out.println("[ScriptTaskStrategy] instantiateCapability starts...");
+								load(task);
+								
+								task.getCapbility().launch();
+								runningCapabilities.add(task.getCapbility());
+								
+							} else {
+								// Capability is loaded already 
+								// which means it is in READY state
+								// it should be in INIT state, not in READY
+								// Therefore, notify TaskManager that it is an
+								// error
+								update = new TaskStatus(taskId,
+										TaskStatus.TaskStatusValue.ERROR, 
+										"ERROR ");
+								setChanged();
+								notifyObservers(update);
+							}
+						} // Traverse Task loop in one GroupedTask
+					} // GroupedTask should not have started - if (groupedTaskStatus.getRetVal()
+				} // Traverse GroupedTask loop
+				monitor(currentTask.getCapbility());
+				
+
+			}
+			else {
+				// Resume command should be executed instead
+				update = new TaskStatus(taskId,
+						TaskStatus.TaskStatusValue.ERROR, "ERROR - task null");
+				setChanged();
+				notifyObservers(update);
+			}
+		} 
+		else {
+			// TaskPlan is missing
+			update = new TaskStatus(taskId,
+			TaskStatus.TaskStatusValue.ERROR, "ERROR missing taskplan");
+			setChanged();
+			notifyObservers(update);
+		}
+	}
+	
+
+
+	/**
+	 * Prints Task Name and Task Status Value for each tasks for testing
+	 * This will never be used in TaskManager or TaskExecutor
+	 */
+	public void printTask() {
+		ArrayList<GroupedTask> arrGroupedTask = tasks.getGroupedTask();
+		for (int index = 0; index < arrGroupedTask.size(); ++index) {
+			GroupedTask groupedTask = arrGroupedTask.get(index);
+			ArrayList<Task> arrTask = groupedTask.getTasks();
+			for (int index2 = 0; index2 < arrTask.size(); ++index2) {
+				System.out.println("[ScriptTaskStrategy] printTask(): Task No: " + arrTask.get(index2).getTaskId());
+				System.out.println("[ScriptTaskStrategy] printTask(): Task Name: " + arrTask.get(index2).getTaskName());
+				System.out.println("[ScriptTaskStrategy] printTask(): Task Status Value: " + (arrTask.get(index2).getTaskStatus()).getRetVal());
+
+				
+				
+				// HashMap Config
+				if(arrTask.get(index2).getConfig() == null)
+					System.out.println("[ScriptTaskStrategy] printTask(): HashMap config is NULL !!!");
+				else
+					System.out.println("[ScriptTaskStrategy] printTask(): HashMap config is NOT NULL ");
+
+				
+				// Check capability
+				if(arrTask.get(index2).getCapbility() == null)
+					System.out.println("[ScriptTaskStrategy] printTask(): Capability is NULL !!!");
+				else
+					System.out.println("[ScriptTaskStrategy] printTask(): Capability status is: " + arrTask.get(index2).getCapbility().getStatus());
+
+				// Check constructor
+				if(arrTask.get(index2).getCapabilityConstructor() == null)
+					System.out.println("[ScriptTaskStrategy] printTask(): Constructor is NULL !!!");
+				else
+					System.out.println("[ScriptTaskStrategy] printTask(): Constructor is NOT NULL !!!");
+				
+				// Check constructor
+				if(arrTask.get(index2).getCapabilityName() == null)
+					System.out.println("[ScriptTaskStrategy] printTask(): CapabilityName");
+				else
+					System.out.println("[ScriptTaskStrategy] printTask(): CapabilityName" + arrTask.get(index2).getCapabilityName());
+					
+					
+				
+				
+				if (arrTask.get(index2).getDependsOn() != null) {
+					System.out.println("[ScriptTaskStrategy] printTask(): Task DependsOn Id: " + arrTask.get(index2).getDependsOn().getId());
+					System.out.println("[ScriptTaskStrategy] printTask(): Task DependsOn Status" + arrTask.get(index2).getDependsOn().getStatus());
+				} else {
+					System.out.println("[ScriptTaskStrategy] printTask(): Task DependsOn No Dependency");
+				}
+				System.out.println("");
+				
+			}
+		}
+
+	}
+
+	/**
+	 * returns index of the capability (dependsOnId) - NOT IMPLEMENTED YET
+	 * 
+	 * @param groupedTaskId
+	 * @param dependsOnId
+	 * @return
+	 */
+	private int searchIndex(int groupedTaskId, int dependsOnId) {
+		int index = -1;
+		return index;
+	}
+
+	
+	@Override
+	public Tasks pause() {
+		TaskStatus s = new TaskStatus(taskId, TaskStatus.TaskStatusValue.PAUSED, "PAUSED");
+		setChanged();
+		notifyObservers(s);
+		
+		return null;
+	}
+
+	@Override
+	public void resume(Object state) {
+		TaskStatus s = new TaskStatus(taskId, TaskStatus.TaskStatusValue.READY, "READY");
+		setChanged();
+		notifyObservers(s);
+	}
+
+	@Override
+	public void terminte(String reason) {
+		
+		// terminate all the running capabilities 
+		for (Capability c : runningCapabilities) {
+			
+			c.terminate();
+			c.unload();
+			stopRunning = true;
+		}
+		
+		TaskStatus s = new TaskStatus(taskId, TaskStatus.TaskStatusValue.CANCELED, reason);
+		setChanged();
+		notifyObservers(s);		
+	}
+		
+	/**
+	 * Defined only in the ScriptTaskStrategy class
+	 */
+	public boolean snapshot() {
+		setChanged();
+		super.notifyObservers(this);
+		return false;
+	}
+
+	public void status() {
+		setChanged();
+		super.notifyObservers(this);
+
+	}
+
+	public void output() {
+		setChanged();
+		super.notifyObservers(this);
+
+	}	
+}

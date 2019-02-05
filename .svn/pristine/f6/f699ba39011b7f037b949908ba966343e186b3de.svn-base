@@ -1,0 +1,197 @@
+package edu.cmu.gizmo.mocks;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.text.DefaultCaret;
+
+
+/** run a $> java MockCobot */
+public class MockCobot {
+	public static final String INVALID_ROOM = "999";
+	private Socket   robot;
+	private Socket task;
+	private Boolean running;
+	
+	private final Integer ROBOT_PORT = 4242;
+	private final Integer TASK_PORT = 4244;
+	
+	private JFrame frame;
+	private JButton triggerFaultButton;
+	private JTextArea output;
+
+	private final String B64_IMAGE = "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";
+	
+	public static void main(String[] args) {
+		MockCobot cobot = new MockCobot();
+		cobot.runCobot();
+	}
+	
+	public MockCobot() {
+		frame = new JFrame("CoBot 3 Mockup");
+		output = new JTextArea(5, 20);
+		output.setBackground(new Color(255,255,255));
+		
+		triggerFaultButton = new JButton("Press to trigger fault");
+		triggerFaultButton.setEnabled(false);
+		triggerFaultButton.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				injectfault();
+			}
+		
+		});
+		
+		frame.setSize(100, 100);
+	
+		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		
+		DefaultCaret caret = (DefaultCaret)output.getCaret();
+		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+		
+		frame.getContentPane().add(new JScrollPane(output), BorderLayout.CENTER);
+		frame.getContentPane().add(triggerFaultButton, BorderLayout.SOUTH);
+		frame.pack();
+		frame.setSize(500, 500);
+		frame.setVisible(true);
+		
+		output.append("trying to connect to the server\n");
+		robot = new Socket();
+		SocketAddress sockaddr = new InetSocketAddress("localhost", ROBOT_PORT);
+		try {
+			robot.connect(sockaddr);
+			output.append("connected\n");
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		try { 
+			Thread.sleep(3000);
+			
+		} catch(InterruptedException e) { } 
+		
+		task= new Socket();
+		sockaddr = new InetSocketAddress("localhost", TASK_PORT);
+		try {
+			output.append("trying to connect proxy\n");
+			task.connect(sockaddr);
+			output.append("connected\n");
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		triggerFaultButton.setEnabled(true);
+		output.append("Fault trigger enabled\n");
+	}
+	
+	private void injectfault() { 
+		output.append("injecting\n");
+		try {
+			PrintWriter w = new PrintWriter(
+					task.getOutputStream());
+			w.println("PROBLEM");
+			w.flush();
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	public void runCobot() {
+		try {
+			Integer counter = 0;
+			Integer imageCounter = 0; 
+			running = true;
+			
+			while (running) {
+				BufferedReader r = new BufferedReader(
+						new InputStreamReader(
+								robot.getInputStream())
+				);
+				char[] in = new char[1024];
+
+				synchronized(robot) {
+					r.read(in,0,1024);
+					String cmd = String.valueOf(in);
+					
+					PrintWriter w = new PrintWriter(
+							robot.getOutputStream());
+
+					String[] arr = cmd.split(",");
+					
+					String op = arr[0].trim();
+					
+					if (op.equals("MoveCamera")) {
+						output.append("MoveCamera received\n");
+					}	
+					else if (op.equals("MoveCobot")) { 
+						output.append("MoveCobot received\n");
+					}
+					else if (op.equals("GetImage")) {
+						output.append("GetImage received " + imageCounter + "\n");
+						//							w.println(new Integer(B64_IMAGE.length()).toString());
+						w.println(B64_IMAGE);
+						if (imageCounter+1 == Integer.MAX_VALUE) {
+							imageCounter = 0;
+						}
+						imageCounter++;
+					}
+					else if (op.equals("GoToRoom")) {
+						counter = 0;
+						w.println("success,42"); 
+						output.append("GoToRoom received\n");
+					}
+					else if (op.equals("status")) {
+						if (arr[1].trim().equals("42")) {
+							if (counter < 5) {
+								w.println("running,Moving & happy");
+								counter++;
+							}
+							else {
+								w.println("complete,hi majed");
+								counter = 0;
+							}
+						} 
+						else {
+							w.println("does not exist");
+						}
+					}
+					w.flush();
+					if (output.getText().length() > 50000)
+						output.setText("");
+					output.setCaretPosition(output.getDocument().getLength());
+				}
+			}
+
+		} catch (Exception e) {
+
+		}			
+	}
+
+	public void kill() { 
+		try {
+			running = false;
+			robot.close();
+		} catch (IOException e) {
+
+		}
+	}
+}

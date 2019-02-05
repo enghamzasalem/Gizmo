@@ -1,0 +1,29 @@
+package edu.cmu.gizmo.unittest;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.capability.QueryGoogleCalendarCapability;
+
+public class TestQueryGoogleCalendarCapability extends TestCase {
+	public void testShouldSetInputParameters(){
+		String startTime = "2012-07-09T00:00:00";
+		String endTime = "2012-07-10T23:59:59";
+		QueryGoogleCalendarCapability x = null;
+
+		try {
+		x = new QueryGoogleCalendarCapability();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+//		x.setInput("input1", "Jane");			
+//		x.setInput("input2", startTime );			
+//		x.setInput("input3", endTime);			
+////		x.execute();
+//		System.out.println(x.getPersonName());
+//		System.out.println(x.getRoomNumber());
+//		System.out.println(x.getAvailStatus());
+//		assertEquals(x.getPersonName(),"Jane Miller");
+
+	}
+
+}
+

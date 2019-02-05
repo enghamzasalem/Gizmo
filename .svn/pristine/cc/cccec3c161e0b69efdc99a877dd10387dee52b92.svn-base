@@ -1,0 +1,115 @@
+/*
+ * TestLogicTaskStrategy.java Jul 12, 2012 1.0
+ */
+
+
+
+
+
+package edu.cmu.gizmo.unittest;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.capability.Capability;
+import edu.cmu.gizmo.management.capability.DummyCapability;
+import edu.cmu.gizmo.management.capability.SecondDummyCapability;
+import edu.cmu.gizmo.management.robot.Robot;
+import edu.cmu.gizmo.management.taskbus.GizmoTaskBus;
+import edu.cmu.gizmo.management.taskmanager.LogicTaskStrategy;
+import edu.cmu.gizmo.management.taskmanager.TaskStatus;
+import edu.cmu.gizmo.management.taskmanager.exceptions.CapabilityNotFoundException;
+
+
+class TwoDummyCapabilityLogicMockup {
+	private final Robot cobot;
+
+	public TwoDummyCapabilityLogicMockup(final Robot cobot) {
+		this.cobot = cobot;
+	}
+
+	public void execute()
+	{		
+		Capability dc = new DummyCapability(cobot);
+		dc.execute();
+
+		Capability dc2 = new SecondDummyCapability(cobot);
+		dc2.execute();
+	}
+}
+
+class TwoDummyCapabilityFailureLogicMockup {
+	private final Robot cobot;
+
+	public TwoDummyCapabilityFailureLogicMockup(final Robot cobot) {
+		this.cobot = cobot;
+	}
+
+	public void execute()
+	{		
+		Capability dc = new DummyCapabilityFailureMockup();
+		dc.execute();
+	}
+}
+
+/**
+ * The Class TestLogicTaskStrategy.
+ */
+public class TestLogicTaskStrategy extends TestCase {
+	/**
+	 * 1. Create TaskBus
+	 * 2. Create Logic that calls two capabilities 
+	 *    (this can be compared to the script)
+	 * 3. Pass Logic name to load and execute
+	 * 4. Check whether Logic completes Task appropriately
+	 */
+	public void testShouldExecuteOneLogicTaskSuccessfully() {
+		GizmoTaskBus bus = GizmoTaskBus.connect();
+		TaskManagerWithBusMockup tmMockup = new TaskManagerWithBusMockup(bus);
+
+		Integer taskId = new Integer(1);
+		Integer capabilityId = new Integer(1);
+		Robot robot = null;
+		String primitive = "Communicate";
+
+		try {
+			LogicTaskStrategy tes;
+			tes = new LogicTaskStrategy(robot, taskId, primitive);
+			tes.addObserver(tmMockup);
+			tes.execute();
+		} catch (CapabilityNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		assertEquals(tmMockup.ts.getStatus(), TaskStatus.TaskStatusValue.COMPLETE);
+	}
+
+	/*
+	 * 1. Create TaskBus
+	 * 2. Create Logic that calls one capability that does not exist
+	 *    (this can be compared to the Malformed script)
+	 * 3. Pass Logic name to load and execute
+	 * 4. Check whether Logic completes its Task in error state
+	 */
+	/**
+	 * Test should fail ill formed logic task.
+	 */
+	public void testShouldFailIllFormedLogicTask() {
+		GizmoTaskBus bus = GizmoTaskBus.connect();
+		TaskManagerWithBusMockup tmMockup = new TaskManagerWithBusMockup(bus);
+
+		Integer taskId = new Integer(1);
+		Integer capabilityId = new Integer(1);
+		Robot robot = null;
+		String capability = "Communicate";
+
+		try {
+			LogicTaskStrategy tes;
+			tes = new LogicTaskStrategy(robot, taskId, capability);
+			tes.addObserver(tmMockup);
+			tes.execute();
+		} catch (CapabilityNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		assertEquals(tmMockup.ts.getStatus(), TaskStatus.TaskStatusValue.ERROR);		
+	}	
+}

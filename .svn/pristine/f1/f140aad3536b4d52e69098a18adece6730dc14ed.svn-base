@@ -1,0 +1,463 @@
+/*
+ * TestTaskExecutor.java Jul 10, 2012 1.0
+ */
+package edu.cmu.gizmo.unittest;
+
+import java.net.Socket;
+import java.util.Observable;
+import java.util.Observer;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import javax.jms.MessageListener;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.capability.Capability;
+import edu.cmu.gizmo.management.capability.GoToRoomDriveCapability;
+import edu.cmu.gizmo.management.robot.Cobot3Robot;
+import edu.cmu.gizmo.management.robot.Robot;
+import edu.cmu.gizmo.management.taskbus.GizmoTaskBus;
+import edu.cmu.gizmo.management.taskmanager.TaskExecutor;
+import edu.cmu.gizmo.management.taskmanager.TaskExecutor.TaskParameter;
+import edu.cmu.gizmo.management.taskmanager.TaskExecutor.TaskType;
+import edu.cmu.gizmo.management.taskmanager.TaskReservation;
+import edu.cmu.gizmo.management.taskmanager.TaskStatus;
+import edu.cmu.gizmo.management.taskmanager.exceptions.TaskConfigurationIncompleteException;
+
+
+class MockRobotForTaskExecutor implements Robot {
+
+	@Override
+	public void connect(Socket connection) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void disconnect() {
+		// TODO Auto-generated method stub
+		
+	}	
+}
+
+
+/**
+ * The Class TestTaskExecutor.
+ */
+public class TestTaskExecutor extends TestCase {
+
+	/** The robot. */
+	private MockRobotForTaskExecutor robot; 
+	
+	/** The c. */
+	private Capability c;
+	
+	/** The bus. */
+	private GizmoTaskBus bus;
+	
+	/** The tm. */
+	private MockTaskManager tm;
+	
+	/* (non-Javadoc)
+	 * @see junit.framework.TestCase#setUp()
+	 */
+	public void setUp() {
+		robot = new MockRobotForTaskExecutor();
+		c = new GoToRoomDriveCapability();
+		bus = GizmoTaskBus.connect();
+		tm = new MockTaskManager();
+	}
+
+
+	public void testShouldBeAbleToCompareDifferentTaskExecutors() {
+	
+		ConcurrentHashMap<TaskParameter,Object> config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		
+		try {
+			TaskExecutor te1 = new TaskExecutor(config);
+			TaskExecutor te2 = new TaskExecutor(config);
+			
+			assertTrue(te1.compareTo(te2) == 0);
+			
+			// change the task id and try again
+			config.replace(TaskParameter.ID,24);
+			te1 =  new TaskExecutor(config);
+			
+			assertTrue(te1.compareTo(te2) != 0);
+			
+			
+		} 
+		catch(TaskConfigurationIncompleteException e) {
+			e.printStackTrace();
+			fail("TE (testScriptTaskConfig): incorrect configuration");
+		} 
+		assertTrue(true);
+	}
+	
+	/**
+	 * Test should accept valid script task config.
+	 */
+	public void testShouldAcceptValidScriptTaskConfig() {
+		ConcurrentHashMap<TaskParameter,Object> config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+			
+		} catch(TaskConfigurationIncompleteException e) {
+			e.printStackTrace();
+			fail("TE (testScriptTaskConfig): incorrect configuration");
+		} catch (NullPointerException npe) {
+						
+		}
+		assertTrue(true);
+	}
+	
+	/**
+	 * Test should throw exception on invalid script task config.
+	 */
+	public void testShouldThrowExceptionOnInvalidScriptTaskConfig() {
+		ConcurrentHashMap<TaskParameter,Object> config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				//put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			
+			TaskExecutor te = 
+				new TaskExecutor(config);
+			
+		} catch(TaskConfigurationIncompleteException e) {
+			// this is the expected exception
+			assertTrue(true);
+			return;
+		} catch (Exception npe) { 	}
+
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				//put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			
+			TaskExecutor te = 
+				new TaskExecutor(config);
+			
+		} catch(TaskConfigurationIncompleteException e) {
+			// this is the expected exception
+			assertTrue(true);
+			return;
+		} catch (Exception npe) { 	}
+		
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				//put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			
+			TaskExecutor te = 
+				new TaskExecutor(config);
+			
+		} catch(TaskConfigurationIncompleteException e) {
+			// this is the expected exception
+			assertTrue(true);
+			return;
+		} catch (Exception npe) { 	}
+		
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				//put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			
+			TaskExecutor te = 
+				new TaskExecutor(config);
+			
+		} catch(TaskConfigurationIncompleteException e) {
+			// this is the expected exception
+			assertTrue(true);
+			return;
+		} catch (Exception npe) { 	}
+		
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				//put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			
+			TaskExecutor te = 
+				new TaskExecutor(config);
+			
+		} catch(TaskConfigurationIncompleteException e) {
+			// this is the expected exception
+			assertTrue(true);
+			return;
+		} catch (Exception npe) { 	}
+		
+		fail("Should have thrown TaskConfigurationIncompleteException ");
+	}
+	
+	/**
+	 * Test should accept valid logic task config.
+	 */
+	public void testShouldAcceptValidLogicTaskConfig() {
+		ConcurrentHashMap<TaskParameter,Object> config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		//
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+		} catch(TaskConfigurationIncompleteException e) {
+			e.printStackTrace();
+			fail("TE (testLogicTaskConfig): incorrect configuration");
+			
+		}	
+		catch (Exception e) { } 
+		assertTrue(true);
+	}
+	
+	/**
+	 * Test should throw exception on invalid logic task config.
+	 */
+	public void testShouldThrowExceptionOnInvalidLogicTaskConfig() {
+		ConcurrentHashMap<TaskParameter,Object> config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				//put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+		} catch(TaskConfigurationIncompleteException e) {
+			// received the right exception
+			assertTrue(true);
+			return;
+		}	
+		catch (Exception e) { } 
+		
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				// put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+		} catch(TaskConfigurationIncompleteException e) {
+			// received the right exception
+			assertTrue(true);
+			return;
+		}	
+		catch (Exception e) { } 
+		
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				// put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+		} catch(TaskConfigurationIncompleteException e) {
+			// received the right exception
+			assertTrue(true);
+			return;
+		}	
+		catch (Exception e) { } 
+		
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				//put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+		} catch(TaskConfigurationIncompleteException e) {
+			// received the right exception
+			assertTrue(true);
+			return;
+		}	
+		catch (Exception e) { } 
+		
+		config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				//put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+		} catch(TaskConfigurationIncompleteException e) {
+			// received the right exception
+			assertTrue(true);
+			return;
+		}	
+		catch (Exception e) { } 
+		
+		fail("TE (testLogicTaskConfig): incorrect configuration accepted");
+	}
+	
+	/**
+	 * Test should set task status to canceled when terminte called.
+	 */
+	public void testShouldSetTaskStatusToCanceledWhenTerminteCalled() {
+		ConcurrentHashMap<TaskParameter,Object> config = 
+			new ConcurrentHashMap<TaskParameter,Object>() {{
+				put(TaskParameter.ROBOT, robot);
+				put(TaskParameter.TYPE,TaskType.LOGIC_TASK);
+				put(TaskParameter.TASK, "GoToRoomCapability");
+				put(TaskParameter.ID, 42);
+				put(TaskParameter.RESERVATION, new TaskReservation(null, null, null, null, null, null));
+			}};
+		
+		try {
+			TaskExecutor te = new TaskExecutor(config);
+			te.addObbserver(tm);
+			te.terminate(null);
+		
+			assertEquals(tm.getStatus(), TaskStatus.TaskStatusValue.CANCELED);
+			
+		} catch(TaskConfigurationIncompleteException e) {
+			e.printStackTrace();
+			fail("TE (testTerminate): incorrect configuration");
+		}
+		catch (Exception e) { } 
+	}
+	
+	/**
+	 * Test should set state to paused when paused called.
+	 */
+	public void testShouldSetStateToPausedWhenPausedCalled() {
+		fail("Not implemented yet");	
+			
+		// TODO Complete test suite for pausing a task
+	}
+
+	/**
+	 * Test should resume from a state when resume called.
+	 */
+	public void testShouldResumeFromAStateWhenResumeCalled() {
+		fail("Not implemented yet");
+		// TODO Complete test suite for resuming a task
+	}
+}
+
+class MockTaskManagerForTaskExecutor implements Observer {
+	private ConcurrentHashMap<Integer,TaskExecutor>tasks;
+	private GizmoTaskBus bus;
+	private MessageConsumer sub;
+	private ExecutorService taskRunner; 
+	private Cobot3Robot cobot;
+	private Integer taskId;
+	private TaskStatus.TaskStatusValue status;
+	
+	private final String[] SELECTORS = {
+			"CAPABILITY_INPUT",
+			"HELO_CLIENT"
+	};
+	
+	public MockTaskManagerForTaskExecutor() {
+		bus = GizmoTaskBus.connect();
+		cobot = null; 
+		taskRunner = Executors.newSingleThreadExecutor();
+		sub = bus.getTaskConsumer(SELECTORS);
+		try {
+			sub.setMessageListener(new MessageListener() {
+			
+				@Override
+				public void onMessage(Message arg0) {
+					// handle various messages
+				}
+			});
+		} catch (JMSException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+	
+	public TaskStatus.TaskStatusValue getStatus() {
+		return status;
+	}
+	public Integer getTaskId() {
+		return taskId;
+	}
+	
+	public void startTask(TaskExecutor exe) {
+		
+		taskRunner.execute(exe);
+	}
+	
+	@Override
+	public void update(Observable o, Object status) {
+	   //System.out.println( ((TaskStatus) status).getStatusMessage());
+	   taskId = ((TaskStatus) status).getTaskId();
+	   this.status = ((TaskStatus) status).getStatus();
+	   // check for control-level issues
+	   // send to bus if necessary	
+	}
+}
+

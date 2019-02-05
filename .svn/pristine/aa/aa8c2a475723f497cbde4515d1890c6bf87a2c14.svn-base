@@ -1,0 +1,64 @@
+package edu.cmu.gizmo.unittest;
+
+import junit.framework.TestCase;
+import edu.cmu.gizmo.management.beans.CapabilityBean;
+import edu.cmu.gizmo.management.beans.TaskDef;
+import edu.cmu.gizmo.management.taskorchestrator.TaskOrchestrationPreReqChecker;
+
+public class TestTaskOrchestrationPreReqChecker extends TestCase {
+
+	public void testShouldVerifyExistenceOfScriptTaskNameInDB() {
+		TaskOrchestrationPreReqChecker preReqChecker = new TaskOrchestrationPreReqChecker();
+
+		TaskDef taskDef = new TaskDef();
+		taskDef.setTaskId(1);
+		taskDef.setTaskDesc("Go to room");
+		taskDef.setTaskName("FindPerson");
+		taskDef.setTaskScriptName("FindPerson.xml");
+		taskDef.setTaskParentId(0);
+
+		assertTrue(preReqChecker.verifyExistenceOfScriptTaskNameInDB(taskDef));		
+	}
+	
+	public void testShouldVerifyExistenceOfScriptTaskNameInFileSystem() {
+		TaskOrchestrationPreReqChecker preReqChecker = new TaskOrchestrationPreReqChecker();
+
+		TaskDef taskDef = new TaskDef();
+		taskDef.setTaskId(1);
+		taskDef.setTaskDesc("Go to room");
+		taskDef.setTaskName("FindPerson");
+		taskDef.setTaskScriptName("FindPerson.xml");
+		taskDef.setTaskParentId(0);
+
+		assertTrue(preReqChecker.verifyExistenceOfScriptTaskNameInFileSystem(taskDef));
+	}
+	
+	public void testShouldVerifyExistenceOfCapabilityInDB() {
+		TaskOrchestrationPreReqChecker preReqChecker = new TaskOrchestrationPreReqChecker();
+
+		CapabilityBean capabilityBean = new CapabilityBean();
+		capabilityBean.setCp_desc("Go to room");
+		//capabilityBean.setCp_exec_typ_cd(cp_exec_typ_cd);
+		capabilityBean.setCp_id(0);
+		capabilityBean.setCp_name("GoToRoomDriveCapability");
+		capabilityBean.setCp_typ_cd("goto");
+
+		assertTrue(preReqChecker.verifyExistenceOfCapabilityInDB(capabilityBean));
+
+	}
+	
+	public void testShouldVerifyExistenceOfCapabilityInFileSystem() {
+		TaskOrchestrationPreReqChecker preReqChecker = new TaskOrchestrationPreReqChecker();
+
+		CapabilityBean capabilityBean = new CapabilityBean();
+		capabilityBean.setCp_desc("Go to room");
+		//capabilityBean.setCp_exec_typ_cd(cp_exec_typ_cd);
+		capabilityBean.setCp_id(0);
+		capabilityBean.setCp_name("GoToRoomDriveCapability");
+		capabilityBean.setCp_typ_cd("goto");
+
+		assertTrue(preReqChecker.verifyExistenceOfCapabilityInFileSystem(capabilityBean));
+		
+	}
+
+}

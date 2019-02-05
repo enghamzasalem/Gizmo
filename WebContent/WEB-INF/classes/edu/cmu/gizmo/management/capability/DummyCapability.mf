@@ -1,0 +1,5 @@
+robot.exist=false
+capability.directory=edu.cmu.gizmo.management.capability
+ui.class=XXX
+ui.display=YYY
+output.name=room

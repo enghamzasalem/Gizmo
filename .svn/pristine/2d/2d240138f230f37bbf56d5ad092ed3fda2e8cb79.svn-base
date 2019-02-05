@@ -1,0 +1,6 @@
+robot.exist=true
+capability.directory=edu.cmu.gizmo.management.capability
+ui.class=edu.cmu.gizmo.management.taskclient.observers.CoBot3DashboardObserver
+ui.display=cobot3Dashboard.jsp
+output.name=room
+parameter.name=room

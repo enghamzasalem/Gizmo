@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<JobDescription>
+	<Tasks>
+		<GroupedTask>
+			<GroupedTaskID>1</GroupedTaskID>
+			<Task>
+				<TaskID>1</TaskID>
+				<TaskName>GoToRoomCapability</TaskName>
+				<Flag status="0">Fatal</Flag>
+				<Flag status="1">Success</Flag>
+			</Task>
+		</GroupedTask>
+	</Tasks>
+</JobDescription>

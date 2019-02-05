@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<JobDescription>
+	<Tasks>
+		<GroupedTask>
+			<GroupedTaskID>0</GroupedTaskID>
+			<Task>
+				<TaskID>0</TaskID>
+				<TaskName>DummyPrimitiveCapability</TaskName>
+				<Flag status="0">Fatal</Flag>
+				<Flag status="1">Success</Flag>
+				<Output>
+					<OutputName>Room</OutputName>
+				</Output>
+			</Task>
+			<Task>
+				<TaskID>1</TaskID>
+				<TaskName>SecondDummyPrimitiveCapability</TaskName>
+				<DependsOn id="0" status="3"/>
+				<Flag status="0">Fatal</Flag>
+				<Flag status="1">Success</Flag>
+				<DependsOn id="0" status="2"/>
+				<TaskInputMap>
+					<InputCapabilityId>0</InputCapabilityId>
+					<SrcOutputName>Room</SrcOutputName>
+					<DstParameterName>Room</DstParameterName>
+				</TaskInputMap>
+				<Parameter>
+					<ParameterName>Room</ParameterName>
+				</Parameter>
+				<Output>
+					<OutputName>Done</OutputName>
+				</Output>				
+			</Task>
+		</GroupedTask>
+	</Tasks>
+</JobDescription>
